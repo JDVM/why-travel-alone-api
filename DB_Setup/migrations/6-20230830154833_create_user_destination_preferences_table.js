@@ -3,12 +3,12 @@
  * @returns { Promise<void> }
  */
 exports.up = function(knex) {
-  return knex.createSchema("user_destination_preferences",(table) => {
+  return knex.schema.createTable("user_destination_preferences",(table) => {
     table.increments('id').primary();
-    table.integer("user").notNullable();
-    table.integer("destination_id").notNullable();
+    table.integer("user_id").unsigned().notNullable();
+    table.integer("destination_id").unsigned().notNullable();
     table.foreign('user_id').references("id").inTable("users").onUpdate("CASCADE").onDelete("CASCADE");
-    table.foreign('destination_id').references("id").inTable("users").onUpdate("CASCADE").onDelete("CASCADE");
+    table.foreign('destination_id').references("id").inTable("destinations").onUpdate("CASCADE").onDelete("CASCADE");
   })
 };
 

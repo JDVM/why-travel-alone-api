@@ -7,7 +7,7 @@ exports.up = function (knex) {
         table.increments("id").primary();
         table.string("trip_name").notNullable();
         table.integer("destination_id").unsigned().notNullable();
-        table.integer("number_oftravelers").unsigned().defaultTo(0);
+        table.integer("number_of_travelers").unsigned().defaultTo(0);
         table.string("notes");
         table.foreign('destination_id').references("id").inTable("destinations").onUpdate("CASCADE").onDelete("CASCADE");
     })
