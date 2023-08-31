@@ -6,7 +6,7 @@ router.use(express.json())
 
 router.get("/", async (_req, res) => {
     try {
-        const travelers = await knex("users");
+        const travelers = await knex("trips");
         res.status(200).json(travelers);
     } catch (error) {
         console.error("Error retrieving travelers", error);
