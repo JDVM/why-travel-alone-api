@@ -793,6 +793,10 @@ exports.seed = async function (knex) {
   {
       id: 197,
       place: 'Zimbabwe'
+  },
+  {
+    id:198,
+    place:'No Preference'
   }
   ]);
 };
