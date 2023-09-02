@@ -31,7 +31,7 @@ router.get("/", async (_req, res) => {
 
 router.get("/:id", async (req, res) => {
     const travelerId = req.params.id;
-    try {
+    try { 
         const traveler = await knex
             .select(
                 "users.id as user_id",
