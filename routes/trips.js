@@ -57,14 +57,12 @@ router.get("/:id", async (req, res) => {
             .innerJoin("user_trips", "users.id", "=", "user_trips.user_id")
             .where("user_trips.trip_id", tripId);
 
-        // Execute both queries concurrently
         const [trip, users] = await Promise.all([tripQuery, usersQuery]);
 
         if (!trip || trip.length === 0) {
             return res.status(404).json({ error: "Trip not found" });
         }
 
-        // Combine the trip and users data
         const tripWithUsers = {
             ...trip[0],
             users,
@@ -76,6 +74,42 @@ router.get("/:id", async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 });
+
+router.put("/:id", async (req, res) => {
+    const { id } = req.params;
+    try {
+        const { trip_name, kid_friendly, trip_length, notes } = req.body;
+
+        console.log(trip_name)
+        console.log(kid_friendly)
+        console.log(trip_length)
+        console.log(notes)
+
+        if (!trip_name || !kid_friendly || !trip_length || !notes) {
+            return res.status(400).json({ error: "All fields are required!" });
+        } else if (isNaN(trip_length)) {
+            return res.status(400).json({ error: "length is not a number!" });
+        }
+        const existingTrip = await knex('trips')
+            .where("id", id)
+            .first()
+
+        if (!existingTrip) {
+            return res.status(404).json({ error: "Trip not found" });
+        }
+
+        await knex("trips")
+            .where("id", id)
+            .update({
+                trip_name, kid_friendly, trip_length, notes
+            })
+        res.status(200).json({ message: 'Trip updated successfully' });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+})
+
 
 module.exports = router;
 

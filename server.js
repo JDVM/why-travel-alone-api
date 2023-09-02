@@ -9,9 +9,12 @@ app.use(express.json())
 app.use(cors());
 const travelerRoutes = require("./routes/travelers");
 const tripsRoutes = require("./routes/trips");
+const destinationRoutes = require("./routes/destinations");
 
 app.use("/travelers", travelerRoutes);
 app.use("/trips", tripsRoutes);
+app.use("/destinations", destinationRoutes)
+
 
 const PORT = process.env.PORT ||5050;
 app.listen(PORT, () => {
