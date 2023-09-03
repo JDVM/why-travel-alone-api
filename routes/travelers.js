@@ -59,4 +59,25 @@ router.get("/:id", async (req, res) => {
     }
 });
 
+router.post("/addto", async (req, res) => {
+    try {
+        const { user_id, trip_id } = req.body;
+
+        if (!trip_id || !user_id) {
+            return res.status(400).json({ error: "Bad Request check data!" });
+        } 
+
+        // add validation if user is already on th trip
+
+        const insertedUser = await knex("user_trips")
+            .insert({
+                user_id, trip_id
+            });
+
+        res.status(201).json({ message: 'Traveler added successfully', id: insertedUser });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
 module.exports = router;

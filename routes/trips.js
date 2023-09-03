@@ -112,6 +112,36 @@ router.put("/:id", async (req, res) => {
     }
 })
 
+router.post("/new", async (req, res) => {
+    try {
+        const { trip_name, kid_friendly, trip_length, destination_id, notes } = req.body;
+
+        if (!trip_name || !kid_friendly || !trip_length || !notes || !destination_id) {
+            return res.status(400).json({ error: "All fields are required!" });
+        } else if (isNaN(trip_length)) {
+            return res.status(400).json({ error: "Length is not a number!" });
+        }
+
+        const existingTrip = await knex('trips')
+            .where("trip_name", trip_name)
+            .first();
+
+        if (existingTrip) {
+            return res.status(409).json({ error: "Trip with the same name already exists" });
+        }
+
+        const insertedTrip = await knex("trips")
+            .insert({
+                trip_name, kid_friendly, trip_length, destination_id, notes
+            });
+
+        res.status(201).json({ message: 'Trip added successfully', trip: insertedTrip[0] });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
 
 module.exports = router;
 
