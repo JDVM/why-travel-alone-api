@@ -12,7 +12,7 @@ exports.seed = async function (knex) {
       trip_length: 7,
       destination_id: 1,
       notes: 'Exciting adventure awaits!',
-      kid_friendly:1
+      kid_friendly:"false"
     },
     {
       id: 2,
@@ -20,7 +20,7 @@ exports.seed = async function (knex) {
       trip_length: 12,
       destination_id: 2,
       notes: 'Get ready for a gourmet journey!',
-      kid_friendly:0
+      kid_friendly:"true"
     },
     {
       id: 3,
@@ -28,7 +28,7 @@ exports.seed = async function (knex) {
       trip_length: 5,
       destination_id: 3, 
       notes: 'Discover the past!',
-      kid_friendly:0
+      kid_friendly:"false"
     }
   ]);
 };

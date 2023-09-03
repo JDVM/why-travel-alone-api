@@ -10,7 +10,7 @@ exports.up = function (knex) {
         table.foreign('destination_id').references("id").inTable("destinations").onUpdate("CASCADE").onDelete("CASCADE");
         table.integer("trip_length").unsigned().notNullable();
         table.string("notes");
-        table.boolean('kid_friendly').notNullable;
+        table.string("kid_friendly").notNullable().checkIn(["true", "false"]);
         table.integer("travelers").unsigned();
         table.foreign("travelers").references("id").inTable("user_trips").onUpdate("CASCADE").onDelete("CASCADE");
     })

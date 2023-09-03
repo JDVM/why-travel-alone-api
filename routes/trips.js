@@ -78,14 +78,16 @@ router.get("/:id", async (req, res) => {
 router.put("/:id", async (req, res) => {
     const { id } = req.params;
     try {
-        const { trip_name, kid_friendly, trip_length, notes } = req.body;
+        const { trip_name, kid_friendly, trip_length, destination_id, notes } = req.body;
 
         console.log(trip_name)
         console.log(kid_friendly)
         console.log(trip_length)
         console.log(notes)
+        console.log(destination_id)
+        console.log(req.body)
 
-        if (!trip_name || !kid_friendly || !trip_length || !notes) {
+        if (!trip_name || !kid_friendly || !trip_length || !notes || !destination_id) {
             return res.status(400).json({ error: "All fields are required!" });
         } else if (isNaN(trip_length)) {
             return res.status(400).json({ error: "length is not a number!" });
@@ -101,7 +103,7 @@ router.put("/:id", async (req, res) => {
         await knex("trips")
             .where("id", id)
             .update({
-                trip_name, kid_friendly, trip_length, notes
+                trip_name, kid_friendly, trip_length, destination_id, notes
             })
         res.status(200).json({ message: 'Trip updated successfully' });
     } catch (error) {
