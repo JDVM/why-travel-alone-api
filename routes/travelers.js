@@ -31,7 +31,7 @@ router.get("/", async (_req, res) => {
 
 router.get("/:id", async (req, res) => {
     const travelerId = req.params.id;
-    try { 
+    try {
         const traveler = await knex
             .select(
                 "users.id as user_id",
@@ -65,7 +65,7 @@ router.post("/addto", async (req, res) => {
 
         if (!trip_id || !user_id) {
             return res.status(400).json({ error: "Bad Request check data!" });
-        } 
+        }
 
         // add validation if user is already on th trip
 
@@ -80,4 +80,24 @@ router.post("/addto", async (req, res) => {
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
+
+router.delete("/:tripId/:userId", async (req, res) => {
+    const { userId, tripId } = req.params;
+
+    try {
+        const rowsToDelete = await knex("user_trips")
+            .where({ user_id: userId, trip_id: tripId })
+            .delete();
+
+        if (rowsToDelete === 0) {
+            throw new Error(`Failed to delete Traveler ID ${userId} from Trip ID ${tripId}`);
+        } else {
+            res.sendStatus(204);
+            console.log("Delete successful");
+        }
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+}); 
 module.exports = router;

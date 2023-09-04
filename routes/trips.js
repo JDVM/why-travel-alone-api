@@ -142,6 +142,26 @@ router.post("/new", async (req, res) => {
     }
 });
 
+router.delete("/:id", async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const rowsToDelete = await knex("trips")
+            .where("id", id)
+            .delete();
+
+        if (!rowsToDelete === 0) {
+            throw new Error(`Failed to delete Trip ID ${id}`);
+        } else {
+            res.sendStatus(204);
+            console.log("Delete successful");
+        }
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+}); 
+
 
 module.exports = router;
 
