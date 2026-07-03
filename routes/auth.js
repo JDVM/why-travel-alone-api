@@ -10,7 +10,11 @@ const MIN_PASSWORD_LENGTH = 8;
 router.post('/register', async (req, res) => {
     const { email, password } = req.body || {};
 
-    if (!email || !EMAIL_REGEX.test(email)) {
+    // Normalize before validating so an address pasted with surrounding
+    // whitespace or mixed case is accepted (and stored) in its canonical form.
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+
+    if (!normalizedEmail || !EMAIL_REGEX.test(normalizedEmail)) {
         return res.status(400).json({ error: 'A valid email is required' });
     }
     if (!password || password.length < MIN_PASSWORD_LENGTH) {
@@ -18,7 +22,6 @@ router.post('/register', async (req, res) => {
     }
 
     try {
-        const normalizedEmail = email.trim().toLowerCase();
 
         const existing = await knex('accounts').where({ email: normalizedEmail }).first();
         if (existing) {
