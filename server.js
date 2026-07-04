@@ -7,10 +7,12 @@ const cors = require('cors');
 require('dotenv').config();
 app.use(express.json())
 app.use(cors());
+const authRoutes = require("./routes/auth");
 const travelerRoutes = require("./routes/travelers");
 const tripsRoutes = require("./routes/trips");
 const destinationRoutes = require("./routes/destinations");
 
+app.use("/auth", authRoutes);
 app.use("/travelers", travelerRoutes);
 app.use("/trips", tripsRoutes);
 app.use("/destinations", destinationRoutes)

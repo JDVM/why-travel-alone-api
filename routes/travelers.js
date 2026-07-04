@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
-const knex = require("knex")(require("../knexfile").development);
+const knex = require("../db");
+const authenticate = require("../middleware/authenticate");
 
 router.use(express.json())
 
@@ -59,7 +60,7 @@ router.get("/:id", async (req, res) => {
     }
 });
 
-router.post("/addto", async (req, res) => {
+router.post("/addto", authenticate, async (req, res) => {
     try {
         const { user_id, trip_id } = req.body;
 
@@ -81,7 +82,7 @@ router.post("/addto", async (req, res) => {
     }
 });
 
-router.delete("/:tripId/:userId", async (req, res) => {
+router.delete("/:tripId/:userId", authenticate, async (req, res) => {
     const { userId, tripId } = req.params;
 
     try {
@@ -90,11 +91,12 @@ router.delete("/:tripId/:userId", async (req, res) => {
             .delete();
 
         if (rowsToDelete === 0) {
-            throw new Error(`Failed to delete Traveler ID ${userId} from Trip ID ${tripId}`);
-        } else {
-            res.sendStatus(204);
-            console.log("Delete successful");
+            // Nothing matched: return 404 rather than a 500, which is what
+            // throwing here previously produced.
+            return res.status(404).json({ error: "Traveler not found on trip" });
         }
+
+        res.sendStatus(204);
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Internal Server Error" });
