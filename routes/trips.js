@@ -31,6 +31,7 @@ router.get("/", authenticate, async (req, res) => {
                 "trips.kid_friendly",
                 "trips.trip_length",
                 "trips.notes",
+                "trips.destination_id",
                 "destinations.place as destination",
                 knex.raw("COUNT(user_trips.user_id) as num_travelers")
             )
@@ -55,6 +56,7 @@ router.get("/:id", authenticate, async (req, res) => {
                 "trips.kid_friendly",
                 "trips.trip_length",
                 "trips.notes",
+                "trips.destination_id",
                 "destinations.place as destination"
             )
             .where("trips.id", tripId)
