@@ -2,8 +2,7 @@ const express = require("express");
 const router = express.Router();
 const knex = require("../db");
 const authenticate = require("../middleware/authenticate");
-
-router.use(express.json())
+const { parseId } = require("../utils/validate");
 
 router.get("/", async (_req, res) => {
     try {
@@ -31,7 +30,10 @@ router.get("/", async (_req, res) => {
 })
 
 router.get("/:id", async (req, res) => {
-    const travelerId = req.params.id;
+    const travelerId = parseId(req.params.id);
+    if (!travelerId) {
+        return res.status(404).json({ error: "Traveler not found" });
+    }
     try {
         const traveler = await knex
             .select(
@@ -68,10 +70,11 @@ function findOwnedTrip(tripId, accountId) {
 
 router.post("/addto", authenticate, async (req, res) => {
     try {
-        const { user_id, trip_id } = req.body;
+        const user_id = parseId(req.body.user_id);
+        const trip_id = parseId(req.body.trip_id);
 
         if (!trip_id || !user_id) {
-            return res.status(400).json({ error: "Bad Request check data!" });
+            return res.status(400).json({ error: "user_id and trip_id must be positive whole numbers" });
         }
 
         if (!(await findOwnedTrip(trip_id, req.account.accountId))) {
@@ -105,7 +108,11 @@ router.post("/addto", authenticate, async (req, res) => {
 });
 
 router.delete("/:tripId/:userId", authenticate, async (req, res) => {
-    const { userId, tripId } = req.params;
+    const tripId = parseId(req.params.tripId);
+    const userId = parseId(req.params.userId);
+    if (!tripId || !userId) {
+        return res.status(404).json({ error: "Traveler not found on trip" });
+    }
 
     try {
         if (!(await findOwnedTrip(tripId, req.account.accountId))) {

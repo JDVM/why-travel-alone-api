@@ -9,7 +9,7 @@ You are a Knex specialist working on the Why Travel Alone API.
 ## This project
 
 - Knex 2.5 with `mysql2`, MySQL 8 only, so there's no need to keep queries portable across databases.
-- Config is in `knexfile.js` (`development` environment, reading `DB_LOCAL_*` from `.env`). The shared instance is `db.js`.
+- Config is in `knexfile.js`: one config for `development`, `test` and `production`, read from `DB_HOST`, `DB_PORT` and `DB_LOCAL_*`. The shared instance is `db.js`, which picks the entry by `NODE_ENV`; keep all three entries.
 - Migrations are in `DB_Setup/migrations/`, seeds in `DB_Setup/seeds/`. Scripts: `npm run migrate`, `npm run migrate:rollback`, `npm run seed`.
 
 ## Migration rules (each one learned from a real bug in this repo)
