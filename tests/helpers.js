@@ -5,6 +5,7 @@ const supertest = require('supertest');
 const createApp = require('../app');
 const knex = require('../db');
 const { hashPassword, generateToken } = require('../utils/auth');
+const { TERMS_VERSION } = require('../config');
 
 // Each test file runs in its own process; close its connection pool at the end.
 after(() => knex.destroy());
@@ -17,6 +18,8 @@ function api(env) {
     return supertest(createApp(env));
 }
 
+// The password of every account createAccount() makes.
+const TEST_PASSWORD = 'test-password-123';
 let sharedHash;
 
 // Creates an account directly in the database and returns it with a valid
@@ -26,10 +29,16 @@ let sharedHash;
 // profile-less account.
 async function createAccount({ profile = true } = {}) {
     if (!sharedHash) {
-        sharedHash = await hashPassword('test-password-123');
+        sharedHash = await hashPassword(TEST_PASSWORD);
     }
     const email = `test-${crypto.randomUUID()}@example.com`;
-    const [id] = await knex('accounts').insert({ email, password_hash: sharedHash, auth_provider: 'local' });
+    const [id] = await knex('accounts').insert({
+        email,
+        password_hash: sharedHash,
+        auth_provider: 'local',
+        terms_accepted_at: new Date(),
+        terms_version: TERMS_VERSION,
+    });
     let travelerId;
     if (profile) {
         [travelerId] = await knex('users').insert({
@@ -38,6 +47,7 @@ async function createAccount({ profile = true } = {}) {
             last_name: `Traveler ${id}`,
             has_kids: true,
             special_considerations: 'Private note',
+            sensitive_consent_at: new Date(),
         });
     }
     return { id, email, travelerId, token: generateToken({ id, email }) };
@@ -60,4 +70,4 @@ const validTrip = (overrides = {}) => ({
     ...overrides,
 });
 
-module.exports = { api, knex, DEMO, createAccount, bearer, demoToken, validTrip };
+module.exports = { api, knex, DEMO, TEST_PASSWORD, createAccount, bearer, demoToken, validTrip };

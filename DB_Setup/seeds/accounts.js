@@ -1,5 +1,6 @@
 const { hashPassword } = require('../../utils/auth');
 const { DEMO_PASSWORD, DEMO_TRAVELER_COUNT, travelerEmail } = require('../demoAccounts');
+const { TERMS_VERSION } = require('../../config');
 
 /**
  * One login per seeded traveler (see DB_Setup/demoAccounts.js). Account 1 is
@@ -15,19 +16,24 @@ const { DEMO_PASSWORD, DEMO_TRAVELER_COUNT, travelerEmail } = require('../demoAc
  */
 exports.seed = async function (knex) {
   const password_hash = await hashPassword(DEMO_PASSWORD);
+  const terms = { terms_accepted_at: new Date(), terms_version: TERMS_VERSION };
   await knex('accounts')
     .insert({
       id: 1,
       email: travelerEmail(1),
       password_hash,
       auth_provider: 'local',
+      ...terms,
     })
     .onConflict('id')
     .merge();
 
   const travelers = [];
   for (let id = 2; id <= DEMO_TRAVELER_COUNT; id++) {
-    travelers.push({ email: travelerEmail(id), password_hash, auth_provider: 'local' });
+    travelers.push({ email: travelerEmail(id), password_hash, auth_provider: 'local', ...terms });
   }
-  await knex('accounts').insert(travelers).onConflict('email').merge(['password_hash']);
+  await knex('accounts')
+    .insert(travelers)
+    .onConflict('email')
+    .merge(['password_hash', 'terms_accepted_at', 'terms_version']);
 };

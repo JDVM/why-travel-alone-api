@@ -3,6 +3,7 @@ const router = express.Router();
 const knex = require('../db');
 const reportError = require('../utils/reportError');
 const { emailTag } = require('../logger');
+const { TERMS_VERSION } = require('../config');
 const authenticate = require('../middleware/authenticate');
 const { hashPassword, verifyPassword, needsRehash, generateToken } = require('../utils/auth');
 const { normalizeEmail, isValidEmail, isPasswordTooLong, newPasswordError, nameError } = require('../utils/validate');
@@ -12,7 +13,7 @@ const { travelerSummary } = require('../utils/travelers');
 // traveler profile with the account. The rest of the profile is filled in
 // later through PUT /profile.
 router.post('/register', async (req, res) => {
-    const { email, password, first_name, last_name } = req.body || {};
+    const { email, password, first_name, last_name, accept_terms } = req.body || {};
 
     // Normalize before validating so an address pasted with surrounding
     // whitespace or mixed case is accepted (and stored) in its canonical form.
@@ -25,6 +26,9 @@ router.post('/register', async (req, res) => {
         newPasswordError(password) || nameError(first_name, 'First name') || nameError(last_name, 'Last name');
     if (fieldError) {
         return res.status(400).json({ error: fieldError });
+    }
+    if (accept_terms !== true) {
+        return res.status(400).json({ error: 'You must accept the terms and privacy policy to create an account' });
     }
 
     try {
@@ -41,6 +45,8 @@ router.post('/register', async (req, res) => {
                 email: normalizedEmail,
                 password_hash,
                 auth_provider: 'local',
+                terms_accepted_at: new Date(),
+                terms_version: TERMS_VERSION,
             });
             const [userId] = await trx('users').insert({ ...traveler, account_id: id });
             return { id, email: normalizedEmail, traveler: { user_id: userId, ...traveler } };

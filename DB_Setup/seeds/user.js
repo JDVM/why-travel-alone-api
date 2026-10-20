@@ -258,5 +258,10 @@ exports.seed = async function(knex) {
       type_of_travel_id: 3,
       special_considerations: 'None'
     }
-  ].map((traveler) => ({ ...traveler, account_id: accountIds[traveler.id] })));
+  ].map((traveler) => ({
+    ...traveler,
+    account_id: accountIds[traveler.id],
+    // Demo travelers agreed to us storing their special considerations.
+    sensitive_consent_at: traveler.special_considerations ? new Date() : null,
+  })));
 };

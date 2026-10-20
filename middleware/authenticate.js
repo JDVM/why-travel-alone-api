@@ -1,3 +1,4 @@
+const knex = require('../db');
 const { verifyToken } = require('../utils/auth');
 
 // The single authentication boundary for the app.
@@ -6,7 +7,10 @@ const { verifyToken } = require('../utils/auth');
 // *how* the caller proved who they are. Swapping auth providers later (managed
 // service, dedicated auth microservice, ...) means changing this one file to
 // produce the same req.account shape — the route handlers stay untouched.
-function authenticate(req, res, next) {
+//
+// A valid token is not enough on its own: the account must still exist, so a
+// deleted account's tokens stop working immediately instead of at expiry.
+async function authenticate(req, res, next) {
     const header = req.headers.authorization || '';
     const [scheme, token] = header.split(' ');
 
@@ -14,13 +18,23 @@ function authenticate(req, res, next) {
         return res.status(401).json({ error: 'Missing or malformed Authorization header' });
     }
 
+    let payload;
     try {
-        const payload = verifyToken(token);
-        req.account = { accountId: payload.accountId, email: payload.email };
-        return next();
+        payload = verifyToken(token);
     } catch (error) {
         return res.status(401).json({ error: 'Invalid or expired token' });
     }
+
+    try {
+        const account = await knex('accounts').where({ id: payload.accountId }).first('id', 'email');
+        if (!account) {
+            return res.status(401).json({ error: 'Invalid or expired token' });
+        }
+        req.account = { accountId: account.id, email: account.email };
+    } catch (error) {
+        return next(error);
+    }
+    return next();
 }
 
 module.exports = authenticate;

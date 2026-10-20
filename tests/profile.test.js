@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { api, createAccount, bearer, validTrip } = require('./helpers');
+const { api, knex, createAccount, bearer, validTrip } = require('./helpers');
 
 const fullProfile = (overrides = {}) => ({
     first_name: 'Rosa',
@@ -8,6 +8,7 @@ const fullProfile = (overrides = {}) => ({
     has_kids: true,
     type_of_travel_id: 2,
     special_considerations: 'Vegetarian',
+    special_considerations_consent: true,
     preferred_destination_ids: [3, 1, 3],
     ...overrides,
 });
@@ -43,6 +44,42 @@ describe('profile', () => {
         assert.equal(cleared.body.type_of_travel_id, null);
         assert.equal(cleared.body.special_considerations, null);
         assert.deepEqual(cleared.body.preferred_destinations, []);
+    });
+
+    it('stores special considerations only with explicit consent, and clearing them withdraws it', async () => {
+        const account = await createAccount({ profile: false });
+        const consentAt = async () =>
+            (await knex('users').where('account_id', account.id).first('sensitive_consent_at')).sensitive_consent_at;
+
+        for (const special_considerations_consent of [undefined, false, 'true']) {
+            const res = await api()
+                .put('/profile')
+                .set(bearer(account))
+                .send(fullProfile({ special_considerations_consent }));
+            assert.equal(res.status, 400, String(special_considerations_consent));
+            assert.match(res.body.error, /agree/);
+        }
+
+        const saved = await api().put('/profile').set(bearer(account)).send(fullProfile());
+        assert.equal(saved.status, 200);
+        assert.equal(saved.body.special_considerations_consent, true);
+        assert.equal('sensitive_consent_at' in saved.body, false);
+        const firstConsent = await consentAt();
+        assert.ok(firstConsent);
+
+        // Saving again keeps the original consent time.
+        await api().put('/profile').set(bearer(account)).send(fullProfile({ special_considerations: 'Vegan' }));
+        assert.deepEqual(await consentAt(), firstConsent);
+
+        // Without special considerations, no consent is needed and none is kept.
+        const cleared = await api()
+            .put('/profile')
+            .set(bearer(account))
+            .send(fullProfile({ special_considerations: '  ', special_considerations_consent: undefined }));
+        assert.equal(cleared.status, 200);
+        assert.equal(cleared.body.special_considerations, null);
+        assert.equal(cleared.body.special_considerations_consent, false);
+        assert.equal(await consentAt(), null);
     });
 
     it('rejects invalid input with 400', async () => {

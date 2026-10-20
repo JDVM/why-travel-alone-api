@@ -18,18 +18,20 @@ async function loadProfile(accountId) {
             "users.last_name",
             "users.has_kids",
             "users.special_considerations",
+            "users.sensitive_consent_at",
             "users.type_of_travel_id",
             "type_of_travel.type_of_travel"
         );
     if (!traveler) {
         return undefined;
     }
+    const { sensitive_consent_at, ...profile } = traveler;
     const preferred_destinations = await knex("user_destination_preferences as preference")
         .join("destinations", "destinations.id", "preference.destination_id")
-        .where("preference.user_id", traveler.user_id)
+        .where("preference.user_id", profile.user_id)
         .select("destinations.id", "destinations.place")
         .orderBy("destinations.place");
-    return { ...traveler, preferred_destinations };
+    return { ...profile, special_considerations_consent: sensitive_consent_at !== null, preferred_destinations };
 }
 
 router.get("/", async (req, res) => {
@@ -69,13 +71,18 @@ router.put("/", async (req, res) => {
 
         const accountId = req.account.accountId;
         await knex.transaction(async (trx) => {
-            const existing = await trx("users").where("account_id", accountId).first("id");
+            const existing = await trx("users").where("account_id", accountId).first("id", "sensitive_consent_at");
+            // Consent is recorded when first given and withdrawn by clearing
+            // the field (validation guarantees consent when it has a value).
+            const sensitive_consent_at = profile.special_considerations
+                ? (existing && existing.sensitive_consent_at) || new Date()
+                : null;
             let userId;
             if (existing) {
                 userId = existing.id;
-                await trx("users").where("id", userId).update(profile);
+                await trx("users").where("id", userId).update({ ...profile, sensitive_consent_at });
             } else {
-                [userId] = await trx("users").insert({ ...profile, account_id: accountId });
+                [userId] = await trx("users").insert({ ...profile, sensitive_consent_at, account_id: accountId });
             }
             await trx("user_destination_preferences").where("user_id", userId).delete();
             if (destinationIds.length > 0) {
