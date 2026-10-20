@@ -3,6 +3,10 @@
 // request that needs the missing value.
 
 const MIN_JWT_SECRET_LENGTH = 32;
+
+// The version of the terms and privacy policy new accounts accept, stored with
+// each account. Change it whenever the published documents change.
+const TERMS_VERSION = '2026-10-21';
 const DEFAULT_CORS_ORIGIN = 'http://localhost:3000';
 
 function configErrors(env = process.env) {
@@ -43,4 +47,4 @@ function trustProxy(env = process.env) {
     return /^\d+$/.test(value) ? Number(value) : value;
 }
 
-module.exports = { configErrors, corsOrigins, trustProxy, MIN_JWT_SECRET_LENGTH };
+module.exports = { configErrors, corsOrigins, trustProxy, MIN_JWT_SECRET_LENGTH, TERMS_VERSION };

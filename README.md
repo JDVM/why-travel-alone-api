@@ -65,6 +65,10 @@ GitHub Actions runs the same tests against MySQL 8 on every pull request (`.gith
 - Accounts: every user is a traveler. Register with a name, then fill in the rest of the profile
 - Travelers: browse other travelers when logged in. Kids and special considerations are visible only to the traveler and to owners of trips they're on
 - Invitations: trip owners invite travelers, who accept or decline. Members can view a trip and leave it; only the owner can change it
+- Privacy:
+  - Signing up requires accepting the terms and privacy policy; the accepted version (`TERMS_VERSION` in `config.js`) and time are stored.
+  - Special considerations can describe health conditions, so they're only stored with explicit consent (`special_considerations_consent: true` on `PUT /profile`). Clearing the field withdraws it.
+  - `GET /account/export` downloads everything stored about the caller as JSON. `DELETE /account` (with the password) deletes the account, its profile and the trips it owns.
 - Fully responsive with a mobile-first design
 
 ## Lessons Learned

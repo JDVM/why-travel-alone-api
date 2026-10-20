@@ -4,16 +4,24 @@ const assert = require('node:assert/strict');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { api, knex, DEMO, createAccount, bearer } = require('./helpers');
+const { TERMS_VERSION } = require('../config');
 
 const uniqueEmail = () => `auth-${crypto.randomUUID()}@example.com`;
-const names = { first_name: 'Ana', last_name: 'Lima' };
+// The rest of a valid signup besides email and password.
+const names = { first_name: 'Ana', last_name: 'Lima', accept_terms: true };
 
 describe('register', () => {
     it('creates an account and its traveler profile, and stores the email normalized', async () => {
         const email = uniqueEmail();
         const res = await api()
             .post('/auth/register')
-            .send({ email: `  ${email.toUpperCase()} `, password: 'a-good-password', first_name: ' Ana ', last_name: 'Lima' });
+            .send({
+                email: `  ${email.toUpperCase()} `,
+                password: 'a-good-password',
+                first_name: ' Ana ',
+                last_name: 'Lima',
+                accept_terms: true,
+            });
         assert.equal(res.status, 201);
         assert.ok(res.body.token);
         assert.equal(res.body.account.email, email);
@@ -49,6 +57,25 @@ describe('register', () => {
             const res = await api().post('/auth/register').send(body);
             assert.equal(res.status, 400, JSON.stringify(body));
         }
+    });
+
+    it('requires accepting the terms, and records which version was accepted', async () => {
+        for (const accept_terms of [undefined, false, 'true']) {
+            const email = uniqueEmail();
+            const res = await api()
+                .post('/auth/register')
+                .send({ email, password: 'a-good-password', ...names, accept_terms });
+            assert.equal(res.status, 400, String(accept_terms));
+            assert.match(res.body.error, /terms/);
+            assert.equal(await knex('accounts').where({ email }).first(), undefined);
+        }
+
+        const email = uniqueEmail();
+        const before = Date.now() - 1000;
+        assert.equal((await api().post('/auth/register').send({ email, password: 'a-good-password', ...names })).status, 201);
+        const account = await knex('accounts').where({ email }).first();
+        assert.equal(account.terms_version, TERMS_VERSION);
+        assert.ok(new Date(account.terms_accepted_at).getTime() >= before);
     });
 
     it('creates no account when the profile is invalid', async () => {

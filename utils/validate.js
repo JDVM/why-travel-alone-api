@@ -130,9 +130,19 @@ function nameError(value, label) {
 // omitted optional fields are cleared). Returns { profile, destinationIds }
 // or { error }. Whether the travel type and destinations exist is checked by
 // the route.
+//
+// Special considerations can describe health conditions, so they are only
+// accepted with explicit consent (special_considerations_consent: true).
 function validateProfileInput(body) {
-    const { first_name, last_name, has_kids, type_of_travel_id, special_considerations, preferred_destination_ids } =
-        body || {};
+    const {
+        first_name,
+        last_name,
+        has_kids,
+        type_of_travel_id,
+        special_considerations,
+        special_considerations_consent,
+        preferred_destination_ids,
+    } = body || {};
 
     const error = nameError(first_name, 'First name') || nameError(last_name, 'Last name');
     if (error) {
@@ -157,6 +167,11 @@ function validateProfileInput(body) {
     const considerations = special_considerations ? special_considerations.trim() : '';
     if (considerations.length > SPECIAL_CONSIDERATIONS_MAX_LENGTH) {
         return { error: `Special considerations must be at most ${SPECIAL_CONSIDERATIONS_MAX_LENGTH} characters` };
+    }
+    if (considerations && special_considerations_consent !== true) {
+        return {
+            error: 'To save special considerations, agree to us storing them, or leave the field empty',
+        };
     }
 
     let destinationIds = [];

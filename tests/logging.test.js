@@ -95,7 +95,7 @@ describe('auth events', () => {
         const email = `log-${Date.now()}@example.com`;
         const register = await request
             .post('/auth/register')
-            .send({ email, password: 'a-good-password', first_name: 'Log', last_name: 'Test' });
+            .send({ email, password: 'a-good-password', first_name: 'Log', last_name: 'Test', accept_terms: true });
         assert.equal(register.status, 201);
         assert.ok(lines.some((l) => l.event === 'auth.register' && l.accountId === register.body.account.id));
         assert.ok(!JSON.stringify(lines).includes(email));

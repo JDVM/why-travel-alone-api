@@ -16,6 +16,7 @@ const destinationRoutes = require('./routes/destinations');
 const invitationRoutes = require('./routes/invitations');
 const profileRoutes = require('./routes/profile');
 const typesOfTravelRoutes = require('./routes/typesOfTravel');
+const accountRoutes = require('./routes/account');
 
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
 const ONE_HOUR = 60 * 60 * 1000;
@@ -92,6 +93,16 @@ function createApp(env = process.env, { logger = defaultLogger } = {}) {
         handler: tooManyRequests,
     }));
 
+    // Password guessing through the account-deletion confirmation.
+    app.delete('/account', rateLimit({
+        windowMs: FIFTEEN_MINUTES,
+        limit: 10,
+        skipSuccessfulRequests: true,
+        standardHeaders: 'draft-8',
+        legacyHeaders: false,
+        handler: tooManyRequests,
+    }));
+
     // For load balancers and uptime checks: is the API up and can it reach the database?
     app.get('/health', async (req, res) => {
         try {
@@ -110,6 +121,7 @@ function createApp(env = process.env, { logger = defaultLogger } = {}) {
     app.use('/invitations', invitationRoutes);
     app.use('/profile', profileRoutes);
     app.use('/types-of-travel', typesOfTravelRoutes);
+    app.use('/account', accountRoutes);
 
     app.use((req, res) => {
         res.status(404).json({ error: 'Not found' });
