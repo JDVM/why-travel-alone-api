@@ -16,9 +16,25 @@ describe('configErrors', () => {
         assert.match(configErrors({ ...goodEnv, JWT_SECRET: 'x'.repeat(31) })[0], /JWT_SECRET/);
     });
 
-    it('requires CORS_ORIGIN in production only', () => {
-        assert.match(configErrors({ ...goodEnv, NODE_ENV: 'production' })[0], /CORS_ORIGIN/);
-        assert.deepEqual(configErrors({ ...goodEnv, NODE_ENV: 'production', CORS_ORIGIN: 'https://a.example' }), []);
+    it('requires CORS_ORIGIN and the mail settings in production only', () => {
+        const production = {
+            ...goodEnv,
+            NODE_ENV: 'production',
+            CORS_ORIGIN: 'https://a.example',
+            SMTP_HOST: 'smtp.example',
+            MAIL_FROM: 'App <no-reply@a.example>',
+            APP_URL: 'https://a.example',
+        };
+        assert.deepEqual(configErrors(production), []);
+        for (const [name, pattern] of [
+            ['CORS_ORIGIN', /CORS_ORIGIN/],
+            ['SMTP_HOST', /SMTP_HOST/],
+            ['MAIL_FROM', /MAIL_FROM/],
+            ['APP_URL', /APP_URL/],
+        ]) {
+            assert.match(configErrors({ ...production, [name]: undefined }).join(), pattern, name);
+        }
+        assert.match(configErrors({ ...production, APP_URL: 'http://a.example' }).join(), /APP_URL/);
     });
 
     it('requires the database name and user', () => {

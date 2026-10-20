@@ -3,6 +3,7 @@ const router = express.Router();
 const knex = require("../db");
 const reportError = require("../utils/reportError");
 const authenticate = require("../middleware/authenticate");
+const requireVerifiedEmail = require("../middleware/requireVerifiedEmail");
 const { parseId, validateTripInput } = require("../utils/validate");
 const { travelerIdFor, privateViewIds, forViewer } = require("../utils/travelers");
 
@@ -223,7 +224,7 @@ router.delete("/:id", async (req, res) => {
 
 // The owner invites a traveler. A traveler who declined, or left the trip,
 // can't be invited to it again.
-router.post("/:id/invitations", async (req, res) => {
+router.post("/:id/invitations", requireVerifiedEmail, async (req, res) => {
     try {
         const access = await loadAccess(req, res, { ownerRequired: true });
         if (!access) {

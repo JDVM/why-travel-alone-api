@@ -3,6 +3,7 @@ const router = express.Router();
 const knex = require("../db");
 const reportError = require("../utils/reportError");
 const authenticate = require("../middleware/authenticate");
+const requireVerifiedEmail = require("../middleware/requireVerifiedEmail");
 const { parseId } = require("../utils/validate");
 const { travelerIdFor } = require("../utils/travelers");
 
@@ -49,7 +50,7 @@ router.get("/", async (req, res) => {
     }
 });
 
-router.post("/:id/accept", async (req, res) => {
+router.post("/:id/accept", requireVerifiedEmail, async (req, res) => {
     try {
         const invitation = await findPendingInvitation(req);
         if (!invitation) {

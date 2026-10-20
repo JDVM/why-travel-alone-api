@@ -8,8 +8,10 @@ const { verifyToken } = require('../utils/auth');
 // service, dedicated auth microservice, ...) means changing this one file to
 // produce the same req.account shape — the route handlers stay untouched.
 //
-// A valid token is not enough on its own: the account must still exist, so a
-// deleted account's tokens stop working immediately instead of at expiry.
+// A valid token is not enough on its own: the account must still exist, and
+// the token must be newer than the last password change. So deleting an
+// account or resetting its password signs out every session immediately
+// instead of at token expiry.
 async function authenticate(req, res, next) {
     const header = req.headers.authorization || '';
     const [scheme, token] = header.split(' ');
@@ -26,11 +28,22 @@ async function authenticate(req, res, next) {
     }
 
     try {
-        const account = await knex('accounts').where({ id: payload.accountId }).first('id', 'email');
-        if (!account) {
+        const account = await knex('accounts')
+            .where({ id: payload.accountId })
+            .first('id', 'email', 'email_verified_at', 'password_changed_at');
+        // iat is in whole seconds; a token from the same second as the change is kept.
+        const issuedBeforeChange =
+            account &&
+            account.password_changed_at &&
+            payload.iat < Math.floor(new Date(account.password_changed_at).getTime() / 1000);
+        if (!account || issuedBeforeChange) {
             return res.status(401).json({ error: 'Invalid or expired token' });
         }
-        req.account = { accountId: account.id, email: account.email };
+        req.account = {
+            accountId: account.id,
+            email: account.email,
+            emailVerified: account.email_verified_at !== null,
+        };
     } catch (error) {
         return next(error);
     }

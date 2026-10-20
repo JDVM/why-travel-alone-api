@@ -65,6 +65,11 @@ GitHub Actions runs the same tests against MySQL 8 on every pull request (`.gith
 - Accounts: every user is a traveler. Register with a name, then fill in the rest of the profile
 - Travelers: browse other travelers when logged in. Kids and special considerations are visible only to the traveler and to owners of trips they're on
 - Invitations: trip owners invite travelers, who accept or decline. Members can view a trip and leave it; only the owner can change it
+- Email:
+  - Signup emails a link to confirm the address (`POST /auth/verify-email`; `POST /auth/resend-verification` sends a new one). Unverified accounts can use the app but can't send or accept invitations.
+  - `POST /auth/forgot-password` always answers 202, so it doesn't reveal which emails have accounts, and emails a one-hour reset link to real ones. `POST /auth/reset-password` sets the new password and signs out every other session.
+  - Links are single-use, and only a SHA-256 hash of each is stored (`account_tokens`).
+  - Emails go through any SMTP provider (`SMTP_*`, `MAIL_FROM`, `APP_URL`); without `SMTP_HOST`, development prints them to the log.
 - Privacy:
   - Signing up requires accepting the terms and privacy policy; the accepted version (`TERMS_VERSION` in `config.js`) and time are stored.
   - Special considerations can describe health conditions, so they're only stored with explicit consent (`special_considerations_consent: true` on `PUT /profile`). Clearing the field withdraws it.

@@ -93,6 +93,28 @@ function createApp(env = process.env, { logger = defaultLogger } = {}) {
         handler: tooManyRequests,
     }));
 
+    // Email sending: password-reset and verification emails go to addresses
+    // other people chose, so cap how many one client can trigger.
+    for (const path of ['/auth/forgot-password', '/auth/resend-verification']) {
+        app.use(path, rateLimit({
+            windowMs: ONE_HOUR,
+            limit: 5,
+            standardHeaders: 'draft-8',
+            legacyHeaders: false,
+            handler: tooManyRequests,
+        }));
+    }
+    // Guessing email-link tokens (only failed attempts count).
+    for (const path of ['/auth/reset-password', '/auth/verify-email']) {
+        app.use(path, rateLimit({
+            windowMs: FIFTEEN_MINUTES,
+            limit: 20,
+            skipSuccessfulRequests: true,
+            standardHeaders: 'draft-8',
+            legacyHeaders: false,
+            handler: tooManyRequests,
+        }));
+    }
     // Password guessing through the account-deletion confirmation.
     app.delete('/account', rateLimit({
         windowMs: FIFTEEN_MINUTES,
