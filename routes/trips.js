@@ -2,21 +2,24 @@ const express = require("express");
 const router = express.Router();
 const knex = require("../db");
 const authenticate = require("../middleware/authenticate");
+const { parseId, validateTripInput } = require("../utils/validate");
 
-// kid_friendly is a real boolean in the schema now. Accept a boolean, or the
-// "true"/"false" strings a not-yet-updated client might still send, and reject
-// anything else. Returns undefined when the value is missing/invalid so callers
-// can treat "not provided" and "false" differently.
-function normalizeKidFriendly(value) {
-    if (typeof value === "boolean") return value;
-    if (value === "true") return true;
-    if (value === "false") return false;
-    return undefined;
+// Validates a create/update body, including that the destination exists (an
+// unknown destination_id would otherwise fail the foreign key as a 500).
+// Responds with 400 and returns undefined when the input is invalid.
+async function readTripInput(req, res) {
+    const { trip, error } = validateTripInput(req.body);
+    if (error) {
+        res.status(400).json({ error });
+        return undefined;
+    }
+    const destination = await knex("destinations").where("id", trip.destination_id).first("id");
+    if (!destination) {
+        res.status(400).json({ error: "Unknown destination" });
+        return undefined;
+    }
+    return trip;
 }
-
-// Empty means missing. Note: 0 and false are intentionally NOT empty — a
-// trip_length of 0 and kid_friendly of false are both legitimate values.
-const isEmpty = (value) => value === undefined || value === null || value === "";
 
 // List only the caller's own trips.
 router.get("/", authenticate, async (req, res) => {
@@ -46,7 +49,10 @@ router.get("/", authenticate, async (req, res) => {
 
 
 router.get("/:id", authenticate, async (req, res) => {
-    const tripId = req.params.id;
+    const tripId = parseId(req.params.id);
+    if (!tripId) {
+        return res.status(404).json({ error: "Trip not found" });
+    }
     try {
         const tripQuery = knex("trips")
             .leftJoin("destinations", "destinations.id", "=", "trips.destination_id")
@@ -99,18 +105,11 @@ router.get("/:id", authenticate, async (req, res) => {
 });
 
 router.put("/:id", authenticate, async (req, res) => {
-    const { id } = req.params;
+    const id = parseId(req.params.id);
+    if (!id) {
+        return res.status(404).json({ error: "Trip not found" });
+    }
     try {
-        const { trip_name, kid_friendly, trip_length, destination_id, notes } = req.body;
-        const kidFriendly = normalizeKidFriendly(kid_friendly);
-
-        // notes is optional (the schema allows null); everything else is required.
-        if (isEmpty(trip_name) || kidFriendly === undefined || isEmpty(trip_length) || isEmpty(destination_id)) {
-            return res.status(400).json({ error: "All fields are required!" });
-        } else if (isNaN(trip_length)) {
-            return res.status(400).json({ error: "length is not a number!" });
-        }
-
         const existingTrip = await knex("trips").where("id", id).first();
 
         // 404 when the trip is missing or owned by someone else.
@@ -118,15 +117,12 @@ router.put("/:id", authenticate, async (req, res) => {
             return res.status(404).json({ error: "Trip not found" });
         }
 
-        await knex("trips")
-            .where("id", id)
-            .update({
-                trip_name,
-                kid_friendly: kidFriendly,
-                trip_length,
-                destination_id,
-                notes,
-            });
+        const trip = await readTripInput(req, res);
+        if (!trip) {
+            return;
+        }
+
+        await knex("trips").where("id", id).update(trip);
         res.status(200).json({ message: "Trip updated successfully" });
     } catch (error) {
         console.log(error);
@@ -136,21 +132,13 @@ router.put("/:id", authenticate, async (req, res) => {
 
 router.post("/new", authenticate, async (req, res) => {
     try {
-        const { trip_name, kid_friendly, trip_length, destination_id, notes } = req.body;
-        const kidFriendly = normalizeKidFriendly(kid_friendly);
-
-        if (isEmpty(trip_name) || kidFriendly === undefined || isEmpty(trip_length) || isEmpty(destination_id)) {
-            return res.status(400).json({ error: "All fields are required!" });
-        } else if (isNaN(trip_length)) {
-            return res.status(400).json({ error: "Length is not a number!" });
+        const trip = await readTripInput(req, res);
+        if (!trip) {
+            return;
         }
 
         const insertedTrip = await knex("trips").insert({
-            trip_name,
-            kid_friendly: kidFriendly,
-            trip_length,
-            destination_id,
-            notes,
+            ...trip,
             owner_id: req.account.accountId,
         });
 
@@ -162,7 +150,10 @@ router.post("/new", authenticate, async (req, res) => {
 });
 
 router.delete("/:id", authenticate, async (req, res) => {
-    const { id } = req.params;
+    const id = parseId(req.params.id);
+    if (!id) {
+        return res.status(404).json({ error: "Trip not found" });
+    }
 
     try {
         const rowsToDelete = await knex("trips")

@@ -8,7 +8,12 @@ You are an Express specialist working on the Why Travel Alone API.
 
 ## This project
 
-- Express 4, CommonJS. The entry point is `server.js`. Routers in `routes/` are mounted at `/auth`, `/travelers`, `/trips` and `/destinations`.
+- Express 4, CommonJS.
+  - `app.js` exports `createApp()`, which builds the app without listening, so tests can create their own instance.
+  - `server.js` checks the environment (`config.js`), starts the server and shuts down cleanly on SIGTERM.
+  - Routers in `routes/` are mounted at `/auth`, `/travelers`, `/trips` and `/destinations`; `GET /health` checks the database.
+- Security middleware lives in `app.js`: `helmet`, CORS limited to `CORS_ORIGIN`, a 10kb JSON body limit, rate limits on `/auth/login` (failed attempts) and `/auth/register`, a JSON 404, and `middleware/errorHandler.js`, which never returns stack traces. New routes go between the rate limiters and the 404.
+- Validate input with `utils/validate.js`: `parseId` for ids (an invalid id is a 404), `validateTripInput` for trips, and the email and password helpers. Check that referenced rows exist (e.g. the destination) so foreign-key errors don't become 500s.
 - Database access always goes through `require('../db')`, the single shared Knex instance and connection pool. Never create a new `knex()` in a route file.
 - `middleware/authenticate.js` is the single authentication boundary. Add `authenticate` to a route and read the caller from `req.account` (`{ accountId, email }`). Route code never parses tokens or headers itself; that's what lets the login provider be replaced later by changing one file.
 - **Ownership rule:** every trip read or write filters by `owner_id = req.account.accountId`.
@@ -21,7 +26,7 @@ You are an Express specialist working on the Why Travel Alone API.
   - Map known database errors to 4xx (for example `ER_DUP_ENTRY` to 409) instead of letting them surface as 500.
   - Never return stack traces or SQL errors to the client.
 - Validation is written by hand in each route. `0` and `false` are valid values (`trip_length: 0`, `kid_friendly: false`), so check for missing values with `undefined`/`null`/`''`, not falsiness.
-- Known gaps (don't fix unless asked, but don't make them worse): `cors()` allows every origin, there's no `helmet`, and `/auth/login` has no rate limiting.
+- Rate-limit counters are kept in memory per server instance. Running several instances needs a shared store (e.g. Redis), and behind a proxy `TRUST_PROXY` must be set so limits apply per client IP.
 - There's no automated test suite yet; `npm test` is a placeholder.
 
 ## Approach
@@ -34,4 +39,4 @@ You are an Express specialist working on the Why Travel Alone API.
 
 ## Before you finish
 
-Start the server (`node server.js`; needs MySQL and a `.env` with `JWT_SECRET`) and exercise every changed endpoint with `curl`. Include the logged-out case, and for trip-related routes, a second account trying to reach the first account's data. Report the requests you made and the status codes you got.
+Start the server (`npm run dev`; needs MySQL and a `.env` with a `JWT_SECRET` of at least 32 characters) and exercise every changed endpoint with `curl`. Include the logged-out case, and for trip-related routes, a second account trying to reach the first account's data. Report the requests you made and the status codes you got.

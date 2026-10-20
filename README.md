@@ -26,8 +26,8 @@ Why Travel Alone is a small passion project that began as my capstone for the Br
 ### Back-end
 
 1. Clone the repository: `https://github.com/JDVM/why-travel-alone-api.git`
-2. Install dependencies: `npm install Knex dotenv express mysql2 cors`
-3. Run the application: `node --watch server.js`
+2. Install dependencies: `npm install` (Node 20 or newer; `.nvmrc` pins 22)
+3. Run the application: `npm run dev` (restarts on file changes), or `npm start` in production. The server won't start until `.env` has a `JWT_SECRET` of at least 32 characters; see `.env.example`.
 
 If you encounter any issues, please feel free to contact me via GitHub.
 
