@@ -43,3 +43,4 @@ On the frontend (a separate repo), the token lives in `localStorage`, so any XSS
 - Only report issues with a real path from a request to the problem; leave out theoretical ones.
 - Separate findings introduced by the change under review from pre-existing or known ones.
 - State which areas you checked and found clean.
+- Check that `tests/` covers new access-control paths (the logged-out case and another account's request). Report a missing test as a finding.

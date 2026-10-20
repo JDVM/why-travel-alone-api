@@ -41,6 +41,16 @@ If you encounter any issues, please feel free to contact me via GitHub.
 - In the terminal, run `npm run migrate` to apply the latest migration files
 - Seed the database by running `npm run seed` to populate it with the latest data
 
+### Running tests
+
+The tests run against a real MySQL database, separate from your development one, because they wipe and re-seed it.
+
+1. Create an empty database, e.g. `CREATE DATABASE wta_test;`, and grant your database user access to it
+2. Add `DB_TEST_DBNAME=wta_test` to `.env`
+3. Run `npm test`
+
+GitHub Actions runs the same tests against MySQL 8 on every pull request (`.github/workflows/ci.yml`).
+
 ## Features
 
 - Trips: Add, Edit, Delete trips

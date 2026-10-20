@@ -27,7 +27,7 @@ You are an Express specialist working on the Why Travel Alone API.
   - Never return stack traces or SQL errors to the client.
 - Validation is written by hand in each route. `0` and `false` are valid values (`trip_length: 0`, `kid_friendly: false`), so check for missing values with `undefined`/`null`/`''`, not falsiness.
 - Rate-limit counters are kept in memory per server instance. Running several instances needs a shared store (e.g. Redis), and behind a proxy `TRUST_PROXY` must be set so limits apply per client IP.
-- There's no automated test suite yet; `npm test` is a placeholder.
+- Tests: `npm test` runs `node:test` + `supertest` against a real MySQL test database (`DB_TEST_DBNAME`, which the tests wipe and re-seed). `tests/helpers.js` has `api()` (a fresh app per call, so rate limits don't leak between tests), `createAccount()` and `validTrip()`. GitHub Actions runs the suite on every PR. Every route change needs tests, including the logged-out case and another account trying the same request.
 
 ## Approach
 
@@ -39,4 +39,4 @@ You are an Express specialist working on the Why Travel Alone API.
 
 ## Before you finish
 
-Start the server (`npm run dev`; needs MySQL and a `.env` with a `JWT_SECRET` of at least 32 characters) and exercise every changed endpoint with `curl`. Include the logged-out case, and for trip-related routes, a second account trying to reach the first account's data. Report the requests you made and the status codes you got.
+Run `npm test` and make sure it passes, with new tests for what you changed. For anything the tests don't cover, start the server (`npm run dev`; needs MySQL and a `.env` with a `JWT_SECRET` of at least 32 characters) and exercise the endpoint with `curl`. Report what you ran and the results.
