@@ -1,3 +1,4 @@
+const { refuseInProduction } = require('../demoAccounts');
 /**
  * Trip memberships and invitations. Owners are travelers on their own trips
  * (traveler 1 is the demo account, which owns trips 1-3; traveler 2 owns
@@ -11,6 +12,7 @@
  * @returns { Promise<void> }
  */
 exports.seed = async function(knex) {
+  refuseInProduction();
   // Deletes ALL existing entries
   await knex('trip_invitations').del()
   await knex('user_trips').del()

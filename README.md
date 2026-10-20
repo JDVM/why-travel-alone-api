@@ -59,6 +59,10 @@ GitHub Actions runs the same tests against MySQL 8 on every pull request (`.gith
 - Auth events have an `event` field: `auth.register`, `auth.login`, `auth.login_failed`, `auth.rate_limited`.
 - Set `SENTRY_DSN` to send unexpected errors (500s, crashes) to Sentry. Events carry the account id, request id and route only: no IP address, headers, cookies, query strings or bodies.
 
+### Deploying
+
+See [DEPLOYMENT.md](DEPLOYMENT.md): container images for the API and web app, configuration, releases and migrations, backups and restores, monitoring, and the launch checklist. `docker compose up` runs a production-like stack locally.
+
 ## Features
 
 - Trips: Add, Edit, Delete trips

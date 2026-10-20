@@ -19,4 +19,14 @@ async function accountIdsByTraveler(knex) {
     return Object.fromEntries(travelerIds.map((id) => [id, idByEmail[travelerEmail(id)]]));
 }
 
-module.exports = { DEMO_PASSWORD, DEMO_TRAVELER_COUNT, travelerEmail, accountIdsByTraveler };
+// The seeds wipe tables and create logins with a published password, so they
+// must never run against a production database. Every seed calls this first.
+function refuseInProduction(env = process.env) {
+    if (env.NODE_ENV === 'production') {
+        throw new Error(
+            'Refusing to run the development seeds with NODE_ENV=production: they delete data and create demo logins.'
+        );
+    }
+}
+
+module.exports = { DEMO_PASSWORD, DEMO_TRAVELER_COUNT, travelerEmail, accountIdsByTraveler, refuseInProduction };

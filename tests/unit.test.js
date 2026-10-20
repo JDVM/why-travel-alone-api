@@ -35,6 +35,7 @@ describe('configErrors', () => {
             assert.match(configErrors({ ...production, [name]: undefined }).join(), pattern, name);
         }
         assert.match(configErrors({ ...production, APP_URL: 'http://a.example' }).join(), /APP_URL/);
+        assert.deepEqual(configErrors({ ...production, APP_URL: 'http://localhost:3000' }), []);
     });
 
     it('requires the database name and user', () => {

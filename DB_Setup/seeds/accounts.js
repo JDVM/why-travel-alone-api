@@ -1,5 +1,5 @@
 const { hashPassword } = require('../../utils/auth');
-const { DEMO_PASSWORD, DEMO_TRAVELER_COUNT, travelerEmail } = require('../demoAccounts');
+const { DEMO_PASSWORD, DEMO_TRAVELER_COUNT, travelerEmail, refuseInProduction } = require('../demoAccounts');
 const { TERMS_VERSION } = require('../../config');
 
 /**
@@ -15,6 +15,7 @@ const { TERMS_VERSION } = require('../../config');
  * @returns { Promise<void> }
  */
 exports.seed = async function (knex) {
+  refuseInProduction();
   const password_hash = await hashPassword(DEMO_PASSWORD);
   // Demo accounts have accepted the terms and confirmed their email.
   const terms = { terms_accepted_at: new Date(), terms_version: TERMS_VERSION, email_verified_at: new Date() };

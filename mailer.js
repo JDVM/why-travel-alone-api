@@ -15,9 +15,10 @@ function createTransport(env = process.env) {
         return nodemailer.createTransport({
             host: env.SMTP_HOST,
             port: Number(env.SMTP_PORT || 587),
-            // true for port 465 (TLS from the start); otherwise STARTTLS is required.
+            // true for port 465 (TLS from the start); otherwise STARTTLS is
+            // required, unless SMTP_REQUIRE_TLS=false (local mail catchers only).
             secure: env.SMTP_SECURE === 'true',
-            requireTLS: env.SMTP_SECURE !== 'true',
+            requireTLS: env.SMTP_SECURE !== 'true' && env.SMTP_REQUIRE_TLS !== 'false',
             auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined,
         });
     }
