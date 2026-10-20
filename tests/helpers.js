@@ -21,14 +21,26 @@ let sharedHash;
 
 // Creates an account directly in the database and returns it with a valid
 // token. Faster than registering through the API, and doesn't count against
-// the registration rate limit.
-async function createAccount() {
+// the registration rate limit. Like a real signup it gets a traveler profile
+// (with private details), unless { profile: false } asks for an older,
+// profile-less account.
+async function createAccount({ profile = true } = {}) {
     if (!sharedHash) {
         sharedHash = await hashPassword('test-password-123');
     }
     const email = `test-${crypto.randomUUID()}@example.com`;
     const [id] = await knex('accounts').insert({ email, password_hash: sharedHash, auth_provider: 'local' });
-    return { id, email, token: generateToken({ id, email }) };
+    let travelerId;
+    if (profile) {
+        [travelerId] = await knex('users').insert({
+            account_id: id,
+            first_name: 'Test',
+            last_name: `Traveler ${id}`,
+            has_kids: true,
+            special_considerations: 'Private note',
+        });
+    }
+    return { id, email, travelerId, token: generateToken({ id, email }) };
 }
 
 function bearer(account) {

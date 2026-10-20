@@ -6,45 +6,71 @@ const jwt = require('jsonwebtoken');
 const { api, knex, DEMO, createAccount, bearer } = require('./helpers');
 
 const uniqueEmail = () => `auth-${crypto.randomUUID()}@example.com`;
+const names = { first_name: 'Ana', last_name: 'Lima' };
 
 describe('register', () => {
-    it('creates an account, returns a token, and stores the email normalized', async () => {
+    it('creates an account and its traveler profile, and stores the email normalized', async () => {
         const email = uniqueEmail();
-        const res = await api().post('/auth/register').send({ email: `  ${email.toUpperCase()} `, password: 'a-good-password' });
+        const res = await api()
+            .post('/auth/register')
+            .send({ email: `  ${email.toUpperCase()} `, password: 'a-good-password', first_name: ' Ana ', last_name: 'Lima' });
         assert.equal(res.status, 201);
         assert.ok(res.body.token);
         assert.equal(res.body.account.email, email);
+        assert.equal(res.body.account.traveler.first_name, 'Ana');
 
         const me = await api().get('/auth/me').set('Authorization', `Bearer ${res.body.token}`);
         assert.equal(me.status, 200);
         assert.equal(me.body.email, email);
+        assert.deepEqual(me.body.traveler, res.body.account.traveler);
+
+        const traveler = await knex('users').where({ account_id: res.body.account.id }).first();
+        assert.equal(traveler.last_name, 'Lima');
+        assert.equal(traveler.type_of_travel_id, null);
+        assert.equal(traveler.has_kids, 0);
     });
 
     it('rejects a duplicate email with 409', async () => {
-        const res = await api().post('/auth/register').send({ email: DEMO.email, password: 'a-good-password' });
+        const res = await api().post('/auth/register').send({ email: DEMO.email, password: 'a-good-password', ...names });
         assert.equal(res.status, 409);
     });
 
-    it('rejects invalid emails and passwords with 400', async () => {
+    it('rejects invalid emails, passwords and names with 400', async () => {
         const cases = [
-            { email: 'not-an-email', password: 'a-good-password' },
-            { email: uniqueEmail(), password: 'short' },
-            { email: uniqueEmail(), password: 'p'.repeat(73) },
-            { email: uniqueEmail() },
+            { email: 'not-an-email', password: 'a-good-password', ...names },
+            { email: uniqueEmail(), password: 'short', ...names },
+            { email: uniqueEmail(), password: 'p'.repeat(73), ...names },
+            { email: uniqueEmail(), ...names },
+            { email: uniqueEmail(), password: 'a-good-password', last_name: 'Lima' },
+            { email: uniqueEmail(), password: 'a-good-password', first_name: 'Ana', last_name: ' ' },
+            { email: uniqueEmail(), password: 'a-good-password', first_name: 'x'.repeat(256), last_name: 'Lima' },
         ];
         for (const body of cases) {
             const res = await api().post('/auth/register').send(body);
             assert.equal(res.status, 400, JSON.stringify(body));
         }
     });
+
+    it('creates no account when the profile is invalid', async () => {
+        const email = uniqueEmail();
+        await api().post('/auth/register').send({ email, password: 'a-good-password', first_name: 'Ana' });
+        assert.equal(await knex('accounts').where({ email }).first(), undefined);
+    });
 });
 
 describe('login', () => {
-    it('logs in the seeded demo account', async () => {
+    it('logs in the seeded demo account, who is traveler 1', async () => {
         const res = await api().post('/auth/login').send({ email: DEMO.email, password: DEMO.password });
         assert.equal(res.status, 200);
         assert.equal(res.body.account.id, DEMO.id);
+        assert.equal(res.body.account.traveler.user_id, 1);
         assert.ok(res.body.token);
+    });
+
+    it('logs in a seeded traveler with their own login', async () => {
+        const res = await api().post('/auth/login').send({ email: 'traveler7@why-travel-alone.local', password: DEMO.password });
+        assert.equal(res.status, 200);
+        assert.equal(res.body.account.traveler.user_id, 7);
     });
 
     it('gives the same 401 for a wrong password and an unknown email', async () => {
@@ -63,7 +89,7 @@ describe('login', () => {
     it("doesn't let a different password sharing the first 72 bytes log in", async () => {
         const email = uniqueEmail();
         const password = 'p'.repeat(72);
-        assert.equal((await api().post('/auth/register').send({ email, password })).status, 201);
+        assert.equal((await api().post('/auth/register').send({ email, password, ...names })).status, 201);
 
         assert.equal((await api().post('/auth/login').send({ email, password: `${password}EXTRA` })).status, 401);
         assert.equal((await api().post('/auth/login').send({ email, password })).status, 200);

@@ -16,11 +16,12 @@ You are an Express specialist working on the Why Travel Alone API.
 - Validate input with `utils/validate.js`: `parseId` for ids (an invalid id is a 404), `validateTripInput` for trips, and the email and password helpers. Check that referenced rows exist (e.g. the destination) so foreign-key errors don't become 500s.
 - Database access always goes through `require('../db')`, the single shared Knex instance and connection pool. Never create a new `knex()` in a route file.
 - `middleware/authenticate.js` is the single authentication boundary. Add `authenticate` to a route and read the caller from `req.account` (`{ accountId, email }`). Route code never parses tokens or headers itself; that's what lets the login provider be replaced later by changing one file.
-- **Ownership rule:** every trip read or write filters by `owner_id = req.account.accountId`.
-  - A trip that doesn't exist and a trip owned by someone else both return the same 404, so ownership can't be probed.
-  - Anything that acts on a trip by id from another resource (such as travelers on a trip) must check ownership first; see `findOwnedTrip` in `routes/travelers.js`.
-  - A missing check of exactly this kind was a real security bug here.
-- Travelers (the `users` table) are currently a public directory: the GET routes don't require a login. Whether travelers belong to accounts is an open product decision, so don't change that unless asked.
+- **Travelers are users.** Every account has one traveler profile (`users.account_id`), created at registration with just a name. The rest is filled in through `PUT /profile`. `utils/travelers.js` has `travelerIdFor(accountId)`.
+- **Trip access rule:** the owner (`trips.owner_id`) can do everything; members (rows in `user_trips`, including the owner) can view; everyone else gets a 404.
+  - Use `loadAccess(req, res, { ownerRequired })` in `routes/trips.js` for any route on a trip. It answers 404 for missing or unrelated trips (the same 404, so trips can't be probed) and 403 when a member tries an owner-only action.
+  - People join a trip only by accepting the owner's invitation (`trip_invitations`: pending, accepted or declined). Leaving a trip records a decline, so the owner can't keep re-adding someone. An owner removing a member clears the invitation, so they can invite them again.
+  - A missing ownership check on the old direct-add traveler routes was a real security bug here.
+- **Private profile fields** (`has_kids`, `special_considerations`, possibly health details) go only to the traveler themselves and to owners of trips they're on. Pass every traveler you return through `forViewer(traveler, await privateViewIds(accountId))`. The traveler directory requires a login.
 - Responses are JSON:
   - Errors use the shape `{ error: "..." }` with 400 for validation, 401 for auth, 404 for missing or not-owned, 409 for conflicts and duplicates, and 500 for unexpected failures (logged with `console.error`).
   - Map known database errors to 4xx (for example `ER_DUP_ENTRY` to 409) instead of letting them surface as 500.
@@ -32,7 +33,7 @@ You are an Express specialist working on the Why Travel Alone API.
 ## Approach
 
 - `async` handlers with a `try`/`catch` in each.
-- One Router per resource; keep handlers short and move shared lookups into small functions like `findOwnedTrip`.
+- One Router per resource; keep handlers short and move shared lookups into small functions like `loadAccess` and `travelerIdFor`.
 - Configuration comes from environment variables (`.env`; see `.env.example`).
 - Keep dependencies minimal; don't add a framework or validation library unless the task asks for one.
 - Keep changes in the style of the surrounding code.

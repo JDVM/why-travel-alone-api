@@ -1,3 +1,5 @@
+const { accountIdsByTraveler } = require('../demoAccounts');
+
 /**
  * @param { import("knex").Knex } knex
  * @returns { Promise<void> } 
@@ -5,6 +7,8 @@
 exports.seed = async function(knex) {
   // Deletes ALL existing entries
   await knex('users').del()
+  // Each traveler belongs to the seeded login with the same number.
+  const accountIds = await accountIdsByTraveler(knex);
   await knex('users').insert([
     {
       id: 1,
@@ -254,5 +258,5 @@ exports.seed = async function(knex) {
       type_of_travel_id: 3,
       special_considerations: 'None'
     }
-  ]);
+  ].map((traveler) => ({ ...traveler, account_id: accountIds[traveler.id] })));
 };
