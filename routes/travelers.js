@@ -60,6 +60,12 @@ router.get("/:id", async (req, res) => {
     }
 });
 
+// The caller's trip with this id, or undefined when it doesn't exist or belongs
+// to another account. Both cases get the same 404 so ownership isn't enumerable.
+function findOwnedTrip(tripId, accountId) {
+    return knex("trips").where({ id: tripId, owner_id: accountId }).first("id");
+}
+
 router.post("/addto", authenticate, async (req, res) => {
     try {
         const { user_id, trip_id } = req.body;
@@ -68,7 +74,19 @@ router.post("/addto", authenticate, async (req, res) => {
             return res.status(400).json({ error: "Bad Request check data!" });
         }
 
-        // add validation if user is already on th trip
+        if (!(await findOwnedTrip(trip_id, req.account.accountId))) {
+            return res.status(404).json({ error: "Trip not found" });
+        }
+
+        const traveler = await knex("users").where("id", user_id).first("id");
+        if (!traveler) {
+            return res.status(404).json({ error: "Traveler not found" });
+        }
+
+        const existing = await knex("user_trips").where({ user_id, trip_id }).first("id");
+        if (existing) {
+            return res.status(409).json({ error: "Traveler is already on this trip" });
+        }
 
         const insertedUser = await knex("user_trips")
             .insert({
@@ -77,6 +95,10 @@ router.post("/addto", authenticate, async (req, res) => {
 
         res.status(201).json({ message: 'Traveler added successfully', id: insertedUser });
     } catch (error) {
+        // A concurrent add can still hit the (user_id, trip_id) unique index.
+        if (error.code === "ER_DUP_ENTRY") {
+            return res.status(409).json({ error: "Traveler is already on this trip" });
+        }
         console.error(error);
         res.status(500).json({ error: "Internal Server Error" });
     }
@@ -86,6 +108,10 @@ router.delete("/:tripId/:userId", authenticate, async (req, res) => {
     const { userId, tripId } = req.params;
 
     try {
+        if (!(await findOwnedTrip(tripId, req.account.accountId))) {
+            return res.status(404).json({ error: "Trip not found" });
+        }
+
         const rowsToDelete = await knex("user_trips")
             .where({ user_id: userId, trip_id: tripId })
             .delete();
