@@ -3,7 +3,9 @@
  * @returns { Promise<void> } 
  */
 exports.seed = async function (knex) {
-  // Deletes ALL existing entries
+  // Deletes ALL existing entries. Trips reference destinations with ON DELETE
+  // RESTRICT, so they go first (the trips seed, which runs next, recreates them).
+  await knex('trips').del()
   await knex('destinations').del()
   await knex('destinations').insert([
     {
