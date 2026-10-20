@@ -23,7 +23,8 @@ You are an Express specialist working on the Why Travel Alone API.
   - A missing ownership check on the old direct-add traveler routes was a real security bug here.
 - **Private profile fields** (`has_kids`, `special_considerations`, possibly health details) go only to the traveler themselves and to owners of trips they're on. Pass every traveler you return through `forViewer(traveler, await privateViewIds(accountId))`. The traveler directory requires a login.
 - Responses are JSON:
-  - Errors use the shape `{ error: "..." }` with 400 for validation, 401 for auth, 404 for missing or not-owned, 409 for conflicts and duplicates, and 500 for unexpected failures (logged with `console.error`).
+  - Errors use the shape `{ error: "..." }` with 400 for validation, 401 for auth, 404 for missing or not-owned, 409 for conflicts and duplicates, and 500 for unexpected failures. A catch block that answers 500 calls `reportError(req, error, 'What failed')` from `utils/reportError.js`, which logs it and sends it to Sentry when `SENTRY_DSN` is set.
+  - Log through `req.log` (pino, JSON lines tagged with the request id), never `console.*`. Log account ids, not emails, names or other personal data; never log tokens, passwords or request bodies.
   - Map known database errors to 4xx (for example `ER_DUP_ENTRY` to 409) instead of letting them surface as 500.
   - Never return stack traces or SQL errors to the client.
 - Validation is written by hand in each route. `0` and `false` are valid values (`trip_length: 0`, `kid_friendly: false`), so check for missing values with `undefined`/`null`/`''`, not falsiness.

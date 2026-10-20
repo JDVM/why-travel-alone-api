@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const knex = require("../db");
+const reportError = require("../utils/reportError");
 const authenticate = require("../middleware/authenticate");
 const { parseId, validateTripInput } = require("../utils/validate");
 const { travelerIdFor, privateViewIds, forViewer } = require("../utils/travelers");
@@ -91,7 +92,7 @@ router.get("/", async (req, res) => {
 
         res.status(200).json(trips);
     } catch (error) {
-        console.error("Error retrieving trips", error);
+        reportError(req, error, "Error retrieving trips");
         res.status(500).json({ error: "Internal server error" });
     }
 });
@@ -153,7 +154,7 @@ router.get("/:id", async (req, res) => {
 
         res.status(200).json(result);
     } catch (error) {
-        console.error("Error retrieving trip", error);
+        reportError(req, error, "Error retrieving trip");
         res.status(500).json({ error: "Internal server error" });
     }
 });
@@ -173,7 +174,7 @@ router.put("/:id", async (req, res) => {
         await knex("trips").where("id", access.tripId).update(trip);
         res.status(200).json({ message: "Trip updated successfully" });
     } catch (error) {
-        console.error(error);
+        reportError(req, error, "Error updating trip");
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -199,7 +200,7 @@ router.post("/new", async (req, res) => {
 
         res.status(201).json({ message: "Trip added successfully", trip: tripId });
     } catch (error) {
-        console.error(error);
+        reportError(req, error, "Error creating trip");
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -215,7 +216,7 @@ router.delete("/:id", async (req, res) => {
         await knex("trips").where("id", access.tripId).delete();
         res.sendStatus(204);
     } catch (error) {
-        console.error(error);
+        reportError(req, error, "Error deleting trip");
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -266,7 +267,7 @@ router.post("/:id/invitations", async (req, res) => {
         if (error.code === "ER_DUP_ENTRY") {
             return res.status(409).json({ error: "Traveler has already been invited" });
         }
-        console.error(error);
+        reportError(req, error, "Error inviting traveler");
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -287,7 +288,7 @@ router.delete("/:id/invitations/:userId", async (req, res) => {
         }
         res.sendStatus(204);
     } catch (error) {
-        console.error(error);
+        reportError(req, error, "Error cancelling invitation");
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -317,7 +318,7 @@ router.delete("/:id/travelers/:userId", async (req, res) => {
         }
         res.sendStatus(204);
     } catch (error) {
-        console.error(error);
+        reportError(req, error, "Error removing traveler");
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -343,7 +344,7 @@ router.delete("/:id/membership", async (req, res) => {
         });
         res.sendStatus(204);
     } catch (error) {
-        console.error(error);
+        reportError(req, error, "Error leaving trip");
         res.status(500).json({ error: "Internal Server Error" });
     }
 });

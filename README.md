@@ -51,6 +51,14 @@ The tests run against a real MySQL database, separate from your development one,
 
 GitHub Actions runs the same tests against MySQL 8 on every pull request (`.github/workflows/ci.yml`).
 
+### Logs and error reporting
+
+- The API writes JSON logs to stdout, one line per event, for the hosting platform to collect. `LOG_LEVEL` sets the detail (`info` by default; tests are silent). To read them locally, pipe through `npx pino-pretty`.
+- Every request gets an id, returned in the `X-Request-Id` response header and attached to all of that request's log lines. A well-formed `X-Request-Id` from a proxy in front of the API is reused.
+- Logs carry account ids, never emails, passwords, tokens, headers or request bodies. Failed logins log a keyed hash of the email (`emailTag`), so repeated attempts on one address can be spotted.
+- Auth events have an `event` field: `auth.register`, `auth.login`, `auth.login_failed`, `auth.rate_limited`.
+- Set `SENTRY_DSN` to send unexpected errors (500s, crashes) to Sentry. Events carry the account id, request id and route only: no IP address, headers, cookies, query strings or bodies.
+
 ## Features
 
 - Trips: Add, Edit, Delete trips

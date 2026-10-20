@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const knex = require("../db");
+const reportError = require("../utils/reportError");
 const authenticate = require("../middleware/authenticate");
 const { parseId } = require("../utils/validate");
 const { travelerIdFor } = require("../utils/travelers");
@@ -43,7 +44,7 @@ router.get("/", async (req, res) => {
             .orderBy("invitation.created_at", "desc");
         res.status(200).json(invitations);
     } catch (error) {
-        console.error("Error retrieving invitations", error);
+        reportError(req, error, "Error retrieving invitations");
         res.status(500).json({ error: "Internal server error" });
     }
 });
@@ -65,7 +66,7 @@ router.post("/:id/accept", async (req, res) => {
         });
         res.status(200).json({ trip_id: invitation.trip_id });
     } catch (error) {
-        console.error(error);
+        reportError(req, error, "Error accepting invitation");
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -81,7 +82,7 @@ router.post("/:id/decline", async (req, res) => {
             .update({ status: "declined", updated_at: knex.fn.now() });
         res.sendStatus(204);
     } catch (error) {
-        console.error(error);
+        reportError(req, error, "Error declining invitation");
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
