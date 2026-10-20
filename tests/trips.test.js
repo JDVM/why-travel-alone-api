@@ -14,11 +14,16 @@ describe('listing and reading trips', () => {
         assert.equal((await api().get('/trips/1')).status, 401);
     });
 
-    it("lists only the caller's own trips", async () => {
+    it('lists the trips the caller owns or is on, and nothing else', async () => {
         const res = await api().get('/trips').set(demoToken());
         assert.equal(res.status, 200);
-        const owned = await knex('trips').where({ owner_id: DEMO.id }).count({ n: '*' }).first();
-        assert.equal(res.body.length, Number(owned.n));
+        const expected = await knex('trips')
+            .where('owner_id', DEMO.id)
+            .orWhereIn('id', knex('user_trips').where('user_id', 1).select('trip_id'))
+            .count({ n: '*' })
+            .first();
+        assert.equal(res.body.length, Number(expected.n));
+        assert.ok(res.body.every((trip) => trip.is_owner === 1));
 
         const newcomer = await createAccount();
         assert.deepEqual((await api().get('/trips').set(bearer(newcomer))).body, []);
@@ -40,7 +45,7 @@ describe('listing and reading trips', () => {
 });
 
 describe('creating and updating trips', () => {
-    it('creates a trip owned by the caller', async () => {
+    it('creates a trip owned by the caller, with the owner as its first traveler', async () => {
         const account = await createAccount();
         const id = await createTrip(account, { trip_name: 'Day trip', trip_length: 0, kid_friendly: true });
 
@@ -48,6 +53,18 @@ describe('creating and updating trips', () => {
         assert.equal(trip.owner_id, account.id);
         assert.equal(trip.trip_length, 0);
         assert.equal(trip.kid_friendly, 1);
+
+        const detail = await api().get(`/trips/${id}`).set(bearer(account));
+        assert.equal(detail.body.is_owner, true);
+        assert.deepEqual(detail.body.users.map((user) => user.user_id), [account.travelerId]);
+        assert.deepEqual(detail.body.invitations, []);
+    });
+
+    it('asks an account without a traveler profile to create one first', async () => {
+        const legacy = await createAccount({ profile: false });
+        const res = await api().post('/trips/new').set(bearer(legacy)).send(validTrip());
+        assert.equal(res.status, 400);
+        assert.match(res.body.error, /profile/);
     });
 
     it('accepts the string values a form submits', async () => {

@@ -3,10 +3,14 @@ const router = express.Router();
 const knex = require('../db');
 const authenticate = require('../middleware/authenticate');
 const { hashPassword, verifyPassword, needsRehash, generateToken } = require('../utils/auth');
-const { normalizeEmail, isValidEmail, isPasswordTooLong, newPasswordError } = require('../utils/validate');
+const { normalizeEmail, isValidEmail, isPasswordTooLong, newPasswordError, nameError } = require('../utils/validate');
+const { travelerSummary } = require('../utils/travelers');
 
+// Every account is a traveler: registration takes a name and creates the
+// traveler profile with the account. The rest of the profile is filled in
+// later through PUT /profile.
 router.post('/register', async (req, res) => {
-    const { email, password } = req.body || {};
+    const { email, password, first_name, last_name } = req.body || {};
 
     // Normalize before validating so an address pasted with surrounding
     // whitespace or mixed case is accepted (and stored) in its canonical form.
@@ -15,9 +19,10 @@ router.post('/register', async (req, res) => {
     if (!isValidEmail(normalizedEmail)) {
         return res.status(400).json({ error: 'A valid email is required' });
     }
-    const passwordError = newPasswordError(password);
-    if (passwordError) {
-        return res.status(400).json({ error: passwordError });
+    const fieldError =
+        newPasswordError(password) || nameError(first_name, 'First name') || nameError(last_name, 'Last name');
+    if (fieldError) {
+        return res.status(400).json({ error: fieldError });
     }
 
     try {
@@ -28,13 +33,17 @@ router.post('/register', async (req, res) => {
         }
 
         const password_hash = await hashPassword(password);
-        const [id] = await knex('accounts').insert({
-            email: normalizedEmail,
-            password_hash,
-            auth_provider: 'local',
+        const traveler = { first_name: first_name.trim(), last_name: last_name.trim() };
+        const account = await knex.transaction(async (trx) => {
+            const [id] = await trx('accounts').insert({
+                email: normalizedEmail,
+                password_hash,
+                auth_provider: 'local',
+            });
+            const [userId] = await trx('users').insert({ ...traveler, account_id: id });
+            return { id, email: normalizedEmail, traveler: { user_id: userId, ...traveler } };
         });
 
-        const account = { id, email: normalizedEmail };
         const token = generateToken(account);
         return res.status(201).json({ token, account });
     } catch (error) {
@@ -77,7 +86,8 @@ router.post('/login', async (req, res) => {
         }
 
         const token = generateToken(account);
-        return res.status(200).json({ token, account: { id: account.id, email: account.email } });
+        const traveler = await travelerSummary(account.id);
+        return res.status(200).json({ token, account: { id: account.id, email: account.email, traveler } });
     } catch (error) {
         console.error('Error logging in', error);
         return res.status(500).json({ error: 'Internal server error' });
@@ -94,7 +104,10 @@ router.get('/me', authenticate, async (req, res) => {
         if (!account) {
             return res.status(404).json({ error: 'Account not found' });
         }
-        return res.status(200).json(account);
+        // traveler is null only for accounts created before every account had
+        // a profile; the frontend sends those users to the profile page.
+        const traveler = await travelerSummary(account.id);
+        return res.status(200).json({ ...account, traveler });
     } catch (error) {
         console.error('Error fetching account', error);
         return res.status(500).json({ error: 'Internal server error' });

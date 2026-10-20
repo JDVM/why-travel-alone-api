@@ -54,7 +54,9 @@ GitHub Actions runs the same tests against MySQL 8 on every pull request (`.gith
 ## Features
 
 - Trips: Add, Edit, Delete trips
-- Traveler: Traveler Details, Add Travelers to trip, Delete travelers from trip
+- Accounts: every user is a traveler. Register with a name, then fill in the rest of the profile
+- Travelers: browse other travelers when logged in. Kids and special considerations are visible only to the traveler and to owners of trips they're on
+- Invitations: trip owners invite travelers, who accept or decline. Members can view a trip and leave it; only the owner can change it
 - Fully responsive with a mobile-first design
 
 ## Lessons Learned

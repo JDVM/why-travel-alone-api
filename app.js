@@ -9,6 +9,9 @@ const authRoutes = require('./routes/auth');
 const travelerRoutes = require('./routes/travelers');
 const tripsRoutes = require('./routes/trips');
 const destinationRoutes = require('./routes/destinations');
+const invitationRoutes = require('./routes/invitations');
+const profileRoutes = require('./routes/profile');
+const typesOfTravelRoutes = require('./routes/typesOfTravel');
 
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
 const ONE_HOUR = 60 * 60 * 1000;
@@ -65,6 +68,9 @@ function createApp(env = process.env) {
     app.use('/travelers', travelerRoutes);
     app.use('/trips', tripsRoutes);
     app.use('/destinations', destinationRoutes);
+    app.use('/invitations', invitationRoutes);
+    app.use('/profile', profileRoutes);
+    app.use('/types-of-travel', typesOfTravelRoutes);
 
     app.use((req, res) => {
         res.status(404).json({ error: 'Not found' });

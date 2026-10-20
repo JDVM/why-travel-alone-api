@@ -1,80 +1,61 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { api, knex, createAccount, bearer, validTrip } = require('./helpers');
-
-async function tripWithOwner() {
-    const owner = await createAccount();
-    const res = await api().post('/trips/new').set(bearer(owner)).send(validTrip());
-    return { owner, tripId: res.body.trip };
-}
-
-const linkCount = async (tripId, userId) =>
-    Number((await knex('user_trips').where({ trip_id: tripId, user_id: userId }).count({ n: '*' }).first()).n);
+const { api, createAccount, bearer, demoToken } = require('./helpers');
 
 describe('traveler directory', () => {
-    it('lists travelers with their preferred destinations', async () => {
-        const res = await api().get('/travelers');
+    it('requires a login', async () => {
+        assert.equal((await api().get('/travelers')).status, 401);
+        assert.equal((await api().get('/travelers/1')).status, 401);
+    });
+
+    it('lists travelers with their public profile', async () => {
+        const viewer = await createAccount();
+        const res = await api().get('/travelers').set(bearer(viewer));
         assert.equal(res.status, 200);
         assert.ok(res.body.length > 0);
-        assert.ok('preferred_destinations' in res.body[0]);
+        const someone = res.body.find((traveler) => traveler.user_id === 7);
+        assert.equal(someone.first_name.length > 0, true);
+        assert.ok('type_of_travel' in someone);
+        assert.ok(Array.isArray(someone.preferred_destinations) || typeof someone.preferred_destinations === 'string');
     });
 
-    it('returns one traveler, or 404 for an invalid or unknown id', async () => {
-        assert.equal((await api().get('/travelers/1')).status, 200);
-        assert.equal((await api().get('/travelers/abc')).status, 404);
-        assert.equal((await api().get('/travelers/999999')).status, 404);
-    });
-});
+    it("hides other travelers' private fields, in the list and one at a time", async () => {
+        const viewer = await createAccount();
+        const list = (await api().get('/travelers').set(bearer(viewer))).body;
+        const others = list.filter((traveler) => traveler.user_id !== viewer.travelerId);
+        assert.ok(others.length > 0);
+        for (const traveler of others) {
+            assert.equal('has_kids' in traveler, false, `traveler ${traveler.user_id}`);
+            assert.equal('special_considerations' in traveler, false, `traveler ${traveler.user_id}`);
+        }
 
-describe('adding travelers to a trip', () => {
-    it('requires a login', async () => {
-        assert.equal((await api().post('/travelers/addto').send({ user_id: 1, trip_id: 1 })).status, 401);
-    });
-
-    it('adds a traveler to your own trip once, and rejects a duplicate with 409', async () => {
-        const { owner, tripId } = await tripWithOwner();
-        const add = () => api().post('/travelers/addto').set(bearer(owner)).send({ user_id: 7, trip_id: tripId });
-
-        assert.equal((await add()).status, 201);
-        assert.equal((await add()).status, 409);
-        assert.equal(await linkCount(tripId, 7), 1);
+        const one = (await api().get('/travelers/7').set(bearer(viewer))).body;
+        assert.equal(one.user_id, 7);
+        assert.equal('special_considerations' in one, false);
     });
 
-    it('returns 404 for an unknown traveler or trip, and 400 for invalid ids', async () => {
-        const { owner, tripId } = await tripWithOwner();
-        const add = (body) => api().post('/travelers/addto').set(bearer(owner)).send(body);
-
-        assert.equal((await add({ user_id: 999999, trip_id: tripId })).status, 404);
-        assert.equal((await add({ user_id: 7, trip_id: 999999 })).status, 404);
-        assert.equal((await add({ user_id: 'x', trip_id: tripId })).status, 400);
+    it('shows your own private fields', async () => {
+        const viewer = await createAccount();
+        const me = (await api().get(`/travelers/${viewer.travelerId}`).set(bearer(viewer))).body;
+        assert.equal(me.special_considerations, 'Private note');
+        assert.equal(me.has_kids, 1);
     });
 
-    it("can't add a traveler to another account's trip", async () => {
-        const { tripId } = await tripWithOwner();
-        const other = await createAccount();
+    it('shows a trip owner the private fields of travelers on their trips', async () => {
+        // Demo (traveler 1) owns trip 1, which seeded traveler 2 is on.
+        const res = await api().get('/travelers/2').set(demoToken());
+        assert.ok('special_considerations' in res.body);
+    });
 
-        const res = await api().post('/travelers/addto').set(bearer(other)).send({ user_id: 8, trip_id: tripId });
+    it('returns 404 for an invalid or unknown id', async () => {
+        const viewer = await createAccount();
+        assert.equal((await api().get('/travelers/abc').set(bearer(viewer))).status, 404);
+        assert.equal((await api().get('/travelers/999999').set(bearer(viewer))).status, 404);
+    });
+
+    it('no longer allows adding someone to a trip directly', async () => {
+        const owner = await createAccount();
+        const res = await api().post('/travelers/addto').set(bearer(owner)).send({ user_id: 7, trip_id: 1 });
         assert.equal(res.status, 404);
-        assert.equal(await linkCount(tripId, 8), 0);
-    });
-});
-
-describe('removing travelers from a trip', () => {
-    it("can't remove a traveler from another account's trip", async () => {
-        const { owner, tripId } = await tripWithOwner();
-        await api().post('/travelers/addto').set(bearer(owner)).send({ user_id: 9, trip_id: tripId });
-        const other = await createAccount();
-
-        assert.equal((await api().delete(`/travelers/${tripId}/9`).set(bearer(other))).status, 404);
-        assert.equal(await linkCount(tripId, 9), 1);
-    });
-
-    it('removes a traveler from your own trip, then 404s when they are no longer on it', async () => {
-        const { owner, tripId } = await tripWithOwner();
-        await api().post('/travelers/addto').set(bearer(owner)).send({ user_id: 10, trip_id: tripId });
-
-        assert.equal((await api().delete(`/travelers/${tripId}/10`).set(bearer(owner))).status, 204);
-        assert.equal(await linkCount(tripId, 10), 0);
-        assert.equal((await api().delete(`/travelers/${tripId}/10`).set(bearer(owner))).status, 404);
     });
 });

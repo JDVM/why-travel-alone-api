@@ -10,6 +10,10 @@ const PASSWORD_MAX_BYTES = 72;
 const TRIP_NAME_MAX_LENGTH = 255;
 const NOTES_MAX_LENGTH = 255;
 const TRIP_LENGTH_MAX_DAYS = 365;
+const NAME_MAX_LENGTH = 255;
+// users.special_considerations is a VARCHAR(50).
+const SPECIAL_CONSIDERATIONS_MAX_LENGTH = 50;
+const MAX_PREFERRED_DESTINATIONS = 20;
 
 // A positive integer id from a route param or body field, or null.
 function parseId(value) {
@@ -111,8 +115,81 @@ function validateTripInput(body) {
     };
 }
 
+// Error message for a required first or last name, or null.
+function nameError(value, label) {
+    if (typeof value !== 'string' || value.trim() === '') {
+        return `${label} is required`;
+    }
+    if (value.trim().length > NAME_MAX_LENGTH) {
+        return `${label} must be at most ${NAME_MAX_LENGTH} characters`;
+    }
+    return null;
+}
+
+// Validates a full profile (PUT /profile replaces the whole profile, so
+// omitted optional fields are cleared). Returns { profile, destinationIds }
+// or { error }. Whether the travel type and destinations exist is checked by
+// the route.
+function validateProfileInput(body) {
+    const { first_name, last_name, has_kids, type_of_travel_id, special_considerations, preferred_destination_ids } =
+        body || {};
+
+    const error = nameError(first_name, 'First name') || nameError(last_name, 'Last name');
+    if (error) {
+        return { error };
+    }
+
+    if (has_kids !== undefined && typeof has_kids !== 'boolean') {
+        return { error: 'Has kids must be true or false' };
+    }
+
+    let typeOfTravelId = null;
+    if (type_of_travel_id !== undefined && type_of_travel_id !== null && type_of_travel_id !== '') {
+        typeOfTravelId = parseId(type_of_travel_id);
+        if (typeOfTravelId === null) {
+            return { error: 'Unknown travel type' };
+        }
+    }
+
+    if (special_considerations !== undefined && special_considerations !== null && typeof special_considerations !== 'string') {
+        return { error: 'Special considerations must be text' };
+    }
+    const considerations = special_considerations ? special_considerations.trim() : '';
+    if (considerations.length > SPECIAL_CONSIDERATIONS_MAX_LENGTH) {
+        return { error: `Special considerations must be at most ${SPECIAL_CONSIDERATIONS_MAX_LENGTH} characters` };
+    }
+
+    let destinationIds = [];
+    if (preferred_destination_ids !== undefined && preferred_destination_ids !== null) {
+        if (!Array.isArray(preferred_destination_ids)) {
+            return { error: 'Preferred destinations must be a list' };
+        }
+        const ids = preferred_destination_ids.map(parseId);
+        if (ids.some((id) => id === null)) {
+            return { error: 'Unknown destination' };
+        }
+        destinationIds = [...new Set(ids)];
+        if (destinationIds.length > MAX_PREFERRED_DESTINATIONS) {
+            return { error: `Choose at most ${MAX_PREFERRED_DESTINATIONS} preferred destinations` };
+        }
+    }
+
+    return {
+        profile: {
+            first_name: first_name.trim(),
+            last_name: last_name.trim(),
+            has_kids: has_kids === true,
+            type_of_travel_id: typeOfTravelId,
+            special_considerations: considerations || null,
+        },
+        destinationIds,
+    };
+}
+
 module.exports = {
     parseId,
+    nameError,
+    validateProfileInput,
     normalizeEmail,
     isValidEmail,
     isPasswordTooLong,
