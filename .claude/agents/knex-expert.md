@@ -43,7 +43,7 @@ You are a Knex specialist working on the Why Travel Alone API.
 
 ## Before you finish
 
-For migration changes, test against a real MySQL 8:
+`npm test` rebuilds the test database from zero on every run (rolls back every migration, migrates and seeds), so it exercises each `down()` too; it must pass. For migration changes, also test against a real MySQL 8:
 
 - A fresh database: `migrate:latest`, then `seed:run`.
 - A database at the previous head with realistic data: migrate, roll back (the schema must match exactly), migrate again.
