@@ -1,8 +1,10 @@
+const { refuseInProduction } = require('../demoAccounts');
 /**
  * @param { import("knex").Knex } knex
  * @returns { Promise<void> } 
  */
 exports.seed = async function (knex) {
+  refuseInProduction();
     // Deletes ALL existing entries
     await knex('user_destination_preferences').del()
     await knex('user_destination_preferences').insert([

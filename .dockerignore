@@ -1,0 +1,16 @@
+# Keep the image small and free of secrets and development-only files.
+.git
+.github
+.claude
+.vscode
+node_modules
+npm-debug.log*
+.env
+.env.*
+!.env.example
+tests
+backups
+*.md
+# The development seeds wipe tables and create demo logins. They refuse to run
+# with NODE_ENV=production, and aren't shipped in the image either.
+DB_Setup/seeds

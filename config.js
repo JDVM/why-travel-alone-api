@@ -29,7 +29,8 @@ function configErrors(env = process.env) {
         if (!env.MAIL_FROM) {
             errors.push('MAIL_FROM must be set in production, e.g. "Why Travel Alone <no-reply@example.com>"');
         }
-        if (!/^https:\/\//.test(env.APP_URL || '')) {
+        // http:// only for a production-like stack on this machine.
+        if (!/^https:\/\//.test(env.APP_URL || '') && !/^http:\/\/localhost(:\d+)?$/.test(env.APP_URL || '')) {
             errors.push('APP_URL must be set in production to the https:// frontend URL used in email links');
         }
     }

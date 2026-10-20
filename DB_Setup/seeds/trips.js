@@ -1,10 +1,11 @@
-const { accountIdsByTraveler } = require('../demoAccounts');
+const { accountIdsByTraveler, refuseInProduction } = require('../demoAccounts');
 
 /**
  * @param { import("knex").Knex } knex
  * @returns { Promise<void> } 
  */
 exports.seed = async function (knex) {
+  refuseInProduction();
   // Deletes ALL existing entries
   await knex('trips').del()
   const accountIds = await accountIdsByTraveler(knex);

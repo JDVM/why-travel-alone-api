@@ -33,6 +33,8 @@ You are a Knex specialist working on the Why Travel Alone API.
 - `trip_invitations`: `(trip_id, user_id)` unique, `status` is `pending`, `accepted` or `declined`, ON DELETE CASCADE from trips and users.
 - `users` holds travelers: `account_id → accounts.id` (NOT NULL, unique, ON DELETE CASCADE); `type_of_travel_id` is nullable (ON DELETE SET NULL) and `has_kids` defaults to false, because signup asks only for a name. `sensitive_consent_at` records consent to storing `special_considerations`, and is NULL whenever that field is.
 - Deleting an account must remove all of its personal data. Everything hanging off `users` or `accounts` uses ON DELETE CASCADE; `trips.owner_id` is RESTRICT, so `DELETE /account` deletes owned trips first. Never add a CASCADE that deletes another person's data (for example from a lookup table like `destinations`). Also `destinations`, `type_of_travel`, `user_destination_preferences`.
+- Lookup data users pick from (travel styles, destinations) lives in `DB_Setup/referenceData.js`. Migration `9-20261021140000_reference_data` inserts it in every environment, and the seeds reset it in development. Add new lookup rows with a new migration, not only a seed.
+- Seeds are development-only: every seed calls `refuseInProduction()` first, and the Docker image doesn't include them.
 - Seeds run alphabetically (`accounts`, `destinations`, `trips`, …, `user_trips`). Every seeded traveler has a login (`DB_Setup/demoAccounts.js`): traveler 1 is `demo@why-travel-alone.local`, which owns trips 1-3, and travelers 2-31 are `traveler<N>@why-travel-alone.local`, all with `password123`. Invitations are seeded in `user_trips.js`, because a separate `trip_invitations` seed would sort before `trips` and `user`.
 
 ## Queries

@@ -44,3 +44,43 @@ jobs:
       - run: npm test
       # Fail on high or critical vulnerabilities in what the server runs.
       - run: npm audit --omit=dev --audit-level=high
+
+  # Builds the production image and runs it the way a deployment does
+  # (migrations, then the API, against MySQL), then signs up through it.
+  docker:
+    runs-on: ubuntu-latest
+    env:
+      JWT_SECRET: ci-only-jwt-secret-at-least-32-characters
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build and start the stack
+        run: docker compose up -d --build api
+      - name: Wait for the API
+        run: |
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:8080/health && exit 0
+            sleep 2
+          done
+          exit 1
+      - name: Sign up, and check the verification email was sent
+        run: |
+          curl -fsS -X POST http://localhost:8080/auth/register \
+            -H 'content-type: application/json' \
+            -d '{"email":"ci@example.com","password":"ci-password-123","first_name":"C","last_name":"I","accept_terms":true}'
+          for i in $(seq 1 20); do
+            total=$(curl -fsS http://localhost:8025/api/v1/messages | jq .total)
+            [ "$total" -ge 1 ] && exit 0
+            sleep 1
+          done
+          exit 1
+      - name: The development seeds refuse to run in production
+        run: |
+          if docker compose run --rm -v "$PWD/DB_Setup/seeds:/app/DB_Setup/seeds:ro" api npx knex seed:run; then
+            echo "Seeds ran with NODE_ENV=production"; exit 1
+          fi
+      - name: Logs
+        if: failure()
+        run: docker compose logs
+      - name: Stop
+        if: always()
+        run: docker compose down -v

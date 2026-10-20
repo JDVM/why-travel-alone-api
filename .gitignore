@@ -16,3 +16,4 @@ npm-debug.log*
 
 #VSCODE SETTINGS
 .vscode
+/backups

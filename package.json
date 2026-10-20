@@ -10,10 +10,10 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node tests/prepareDb.js && node --test --test-reporter=spec --test-concurrency=1 \"tests/**/*.test.js\"",
-    "migrate": "knex migrate:latest --env development",
-    "migrate:down": "npx knex migrate:down",
-    "migrate:rollback": "npx knex migrate:rollback",
-    "seed": "npx knex seed:run"
+    "migrate": "knex migrate:latest",
+    "migrate:rollback": "knex migrate:rollback",
+    "seed": "knex seed:run",
+    "migrate:status": "knex migrate:status"
   },
   "author": "",
   "license": "ISC",
