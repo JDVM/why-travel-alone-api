@@ -42,7 +42,16 @@ function initMonitoring(env = process.env) {
         dsn: env.SENTRY_DSN,
         environment: env.SENTRY_ENVIRONMENT || env.NODE_ENV || 'development',
         release: env.SENTRY_RELEASE || undefined,
-        sendDefaultPii: false,
+        // Collect nothing personal; scrubEvent below is a second line of defense.
+        dataCollection: {
+            userInfo: false,
+            cookies: false,
+            httpHeaders: false,
+            httpBodies: [],
+            urlQueryParams: false,
+            databaseQueryData: false,
+            stackFrameVariables: false,
+        },
         // Errors only; no performance tracing.
         tracesSampleRate: 0,
         // server.js handles crashes itself so they are logged before exiting.
