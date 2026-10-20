@@ -16,7 +16,8 @@ const { TERMS_VERSION } = require('../../config');
  */
 exports.seed = async function (knex) {
   const password_hash = await hashPassword(DEMO_PASSWORD);
-  const terms = { terms_accepted_at: new Date(), terms_version: TERMS_VERSION };
+  // Demo accounts have accepted the terms and confirmed their email.
+  const terms = { terms_accepted_at: new Date(), terms_version: TERMS_VERSION, email_verified_at: new Date() };
   await knex('accounts')
     .insert({
       id: 1,
@@ -35,5 +36,5 @@ exports.seed = async function (knex) {
   await knex('accounts')
     .insert(travelers)
     .onConflict('email')
-    .merge(['password_hash', 'terms_accepted_at', 'terms_version']);
+    .merge(['password_hash', 'terms_accepted_at', 'terms_version', 'email_verified_at']);
 };

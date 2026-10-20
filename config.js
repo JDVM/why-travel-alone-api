@@ -20,6 +20,19 @@ function configErrors(env = process.env) {
     if (env.NODE_ENV === 'production' && !env.CORS_ORIGIN) {
         errors.push('CORS_ORIGIN must be set in production to the frontend URL, e.g. https://app.example.com');
     }
+    if (env.NODE_ENV === 'production') {
+        // Verification and password-reset emails need a mail server and the
+        // frontend address their links point to.
+        if (!env.SMTP_HOST) {
+            errors.push('SMTP_HOST must be set in production (with SMTP_PORT, SMTP_USER and SMTP_PASS as needed)');
+        }
+        if (!env.MAIL_FROM) {
+            errors.push('MAIL_FROM must be set in production, e.g. "Why Travel Alone <no-reply@example.com>"');
+        }
+        if (!/^https:\/\//.test(env.APP_URL || '')) {
+            errors.push('APP_URL must be set in production to the https:// frontend URL used in email links');
+        }
+    }
     for (const name of ['DB_LOCAL_DBNAME', 'DB_LOCAL_USER']) {
         if (!env[name]) {
             errors.push(`${name} must be set`);

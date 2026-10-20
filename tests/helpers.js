@@ -26,8 +26,8 @@ let sharedHash;
 // token. Faster than registering through the API, and doesn't count against
 // the registration rate limit. Like a real signup it gets a traveler profile
 // (with private details), unless { profile: false } asks for an older,
-// profile-less account.
-async function createAccount({ profile = true } = {}) {
+// profile-less account. Its email is verified unless { verified: false }.
+async function createAccount({ profile = true, verified = true } = {}) {
     if (!sharedHash) {
         sharedHash = await hashPassword(TEST_PASSWORD);
     }
@@ -38,6 +38,7 @@ async function createAccount({ profile = true } = {}) {
         auth_provider: 'local',
         terms_accepted_at: new Date(),
         terms_version: TERMS_VERSION,
+        email_verified_at: verified ? new Date() : null,
     });
     let travelerId;
     if (profile) {

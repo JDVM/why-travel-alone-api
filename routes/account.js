@@ -18,7 +18,16 @@ router.get("/export", async (req, res) => {
         const accountId = req.account.accountId;
         const account = await knex("accounts")
             .where("id", accountId)
-            .first("id", "email", "auth_provider", "created_at", "terms_accepted_at", "terms_version");
+            .first(
+                "id",
+                "email",
+                "auth_provider",
+                "created_at",
+                "email_verified_at",
+                "password_changed_at",
+                "terms_accepted_at",
+                "terms_version"
+            );
         const travelerId = await travelerIdFor(accountId);
 
         let profile = null;
