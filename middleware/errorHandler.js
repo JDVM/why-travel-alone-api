@@ -1,3 +1,5 @@
+const reportError = require('../utils/reportError');
+
 // The last middleware in the chain. Turns errors into JSON without leaking
 // internals; Express's default handler sends an HTML page with the stack trace
 // and server file paths.
@@ -10,7 +12,7 @@ function errorHandler(err, req, res, next) {
         return res.status(413).json({ error: 'Request body is too large' });
     }
 
-    console.error('Unhandled error', err);
+    reportError(req, err, 'Unhandled error');
     return res.status(500).json({ error: 'Internal server error' });
 }
 

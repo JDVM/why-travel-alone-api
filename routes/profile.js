@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const knex = require("../db");
+const reportError = require("../utils/reportError");
 const authenticate = require("../middleware/authenticate");
 const { validateProfileInput } = require("../utils/validate");
 
@@ -39,7 +40,7 @@ router.get("/", async (req, res) => {
         }
         res.status(200).json(profile);
     } catch (error) {
-        console.error("Error retrieving profile", error);
+        reportError(req, error, "Error retrieving profile");
         res.status(500).json({ error: "Internal server error" });
     }
 });
@@ -86,7 +87,7 @@ router.put("/", async (req, res) => {
 
         res.status(200).json(await loadProfile(accountId));
     } catch (error) {
-        console.error("Error updating profile", error);
+        reportError(req, error, "Error updating profile");
         res.status(500).json({ error: "Internal server error" });
     }
 });

@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const knex = require('../db');
+const reportError = require('../utils/reportError');
+const { emailTag } = require('../logger');
 const authenticate = require('../middleware/authenticate');
 const { hashPassword, verifyPassword, needsRehash, generateToken } = require('../utils/auth');
 const { normalizeEmail, isValidEmail, isPasswordTooLong, newPasswordError, nameError } = require('../utils/validate');
@@ -44,6 +46,7 @@ router.post('/register', async (req, res) => {
             return { id, email: normalizedEmail, traveler: { user_id: userId, ...traveler } };
         });
 
+        req.log.info({ event: 'auth.register', accountId: account.id }, 'Account registered');
         const token = generateToken(account);
         return res.status(201).json({ token, account });
     } catch (error) {
@@ -51,7 +54,7 @@ router.post('/register', async (req, res) => {
         if (error.code === 'ER_DUP_ENTRY') {
             return res.status(409).json({ error: 'An account with that email already exists' });
         }
-        console.error('Error registering account', error);
+        reportError(req, error, 'Error registering account');
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -76,6 +79,12 @@ router.post('/login', async (req, res) => {
         // reveals which emails are registered.
         const ok = await verifyPassword(password, account ? account.password_hash : null);
         if (!account || !ok) {
+            // The email is logged as a keyed hash: enough to see repeated
+            // attempts against one address without storing the address.
+            req.log.warn(
+                { event: 'auth.login_failed', emailTag: emailTag(normalizedEmail), knownAccount: Boolean(account) },
+                'Login failed'
+            );
             return res.status(401).json({ error: 'Invalid email or password' });
         }
 
@@ -85,11 +94,12 @@ router.post('/login', async (req, res) => {
                 .update({ password_hash: await hashPassword(password) });
         }
 
+        req.log.info({ event: 'auth.login', accountId: account.id }, 'Logged in');
         const token = generateToken(account);
         const traveler = await travelerSummary(account.id);
         return res.status(200).json({ token, account: { id: account.id, email: account.email, traveler } });
     } catch (error) {
-        console.error('Error logging in', error);
+        reportError(req, error, 'Error logging in');
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -109,7 +119,7 @@ router.get('/me', authenticate, async (req, res) => {
         const traveler = await travelerSummary(account.id);
         return res.status(200).json({ ...account, traveler });
     } catch (error) {
-        console.error('Error fetching account', error);
+        reportError(req, error, 'Error fetching account');
         return res.status(500).json({ error: 'Internal server error' });
     }
 });

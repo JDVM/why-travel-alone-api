@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const knex = require("../db");
+const reportError = require("../utils/reportError");
 const authenticate = require("../middleware/authenticate");
 const { parseId } = require("../utils/validate");
 const { privateViewIds, forViewer } = require("../utils/travelers");
@@ -36,7 +37,7 @@ router.get("/", async (req, res) => {
         ]);
         res.status(200).json(travelers.map((traveler) => forViewer(traveler, visibleIds)));
     } catch (error) {
-        console.error("Error retrieving travelers", error);
+        reportError(req, error, "Error retrieving travelers");
         res.status(500).json({ error: "Internal server error" });
     }
 });
@@ -54,7 +55,7 @@ router.get("/:id", async (req, res) => {
         const visibleIds = await privateViewIds(req.account.accountId);
         res.status(200).json(forViewer(traveler, visibleIds));
     } catch (error) {
-        console.error("Error retrieving traveler", error);
+        reportError(req, error, "Error retrieving traveler");
         res.status(500).json({ error: "Internal server error" });
     }
 });
