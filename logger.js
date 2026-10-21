@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const pino = require('pino');
+const { appSecret } = require('./config');
 
 // Structured JSON logs, one object per line, for the hosting platform's log
 // collector. Request handlers log through req.log, which tags every line with
@@ -39,7 +40,7 @@ function createLogger(env = process.env, destination) {
 // of known addresses.
 function emailTag(email, env = process.env) {
     return crypto
-        .createHmac('sha256', `log-email-tag:${env.JWT_SECRET || ''}`)
+        .createHmac('sha256', `log-email-tag:${appSecret(env) || ''}`)
         .update(String(email).trim().toLowerCase())
         .digest('hex')
         .slice(0, 16);

@@ -1,8 +1,7 @@
 const crypto = require('crypto');
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const jwt = require('jsonwebtoken');
-const { api, knex, TEST_PASSWORD, createAccount, bearer, validTrip } = require('./helpers');
+const { api, knex, TEST_PASSWORD, createAccount, signedIn, sessionFrom, validTrip } = require('./helpers');
 const { outbox } = require('../mailer');
 
 const uniqueEmail = () => `mail-${crypto.randomUUID()}@example.com`;
@@ -26,30 +25,21 @@ async function register(email = uniqueEmail()) {
         .post('/auth/register')
         .send({ email, password: 'a-good-password', first_name: 'Ema', last_name: 'Il', accept_terms: true });
     assert.equal(res.status, 201);
-    return { email, token: res.body.token, account: res.body.account };
-}
-
-// A login token issued a while ago, like one on another device.
-function oldToken(account) {
-    return jwt.sign(
-        { accountId: account.id, email: account.email, iat: Math.floor(Date.now() / 1000) - 60 },
-        process.env.JWT_SECRET,
-        { algorithm: 'HS256', expiresIn: '1h' }
-    );
+    return { email, session: sessionFrom(res), account: res.body.account };
 }
 
 describe('email verification', () => {
     it('emails a link at signup and confirms the address when it is opened', async () => {
-        const { email, token, account } = await register();
+        const { email, session, account } = await register();
         assert.equal(account.email_verified, false);
-        assert.equal((await api().get('/auth/me').set('Authorization', `Bearer ${token}`)).body.email_verified, false);
+        assert.equal((await api().get('/auth/me').set(session)).body.email_verified, false);
 
         const message = await mailTo(email, /confirm your email/i);
         assert.match(message.text, /http:\/\/localhost:3000\/verify-email\?token=[\w-]{43}/);
 
         const verify = await api().post('/auth/verify-email').send({ token: linkToken(message) });
         assert.equal(verify.status, 200);
-        assert.equal((await api().get('/auth/me').set('Authorization', `Bearer ${token}`)).body.email_verified, true);
+        assert.equal((await api().get('/auth/me').set(session)).body.email_verified, true);
 
         // Links are single-use.
         assert.equal((await api().post('/auth/verify-email').send({ token: linkToken(message) })).status, 400);
@@ -74,18 +64,18 @@ describe('email verification', () => {
     });
 
     it('resends a link, after which only the newest one works', async () => {
-        const { email, token } = await register();
+        const { email, session } = await register();
         const first = linkToken(await mailTo(email, /confirm your email/i));
 
         assert.equal((await api().post('/auth/resend-verification')).status, 401);
-        const resend = await api().post('/auth/resend-verification').set('Authorization', `Bearer ${token}`);
+        const resend = await api().post('/auth/resend-verification').set(session);
         assert.equal(resend.status, 202);
         const second = linkToken(await mailTo(email, /confirm your email/i, { count: 2 }));
 
         assert.equal((await api().post('/auth/verify-email').send({ token: first })).status, 400);
         assert.equal((await api().post('/auth/verify-email').send({ token: second })).status, 200);
 
-        const again = await api().post('/auth/resend-verification').set('Authorization', `Bearer ${token}`);
+        const again = await api().post('/auth/resend-verification').set(session);
         assert.equal(again.status, 200);
         assert.equal(again.body.email_verified, true);
     });
@@ -95,24 +85,24 @@ describe('email verification', () => {
         const unverifiedOwner = await createAccount({ verified: false });
         const unverifiedGuest = await createAccount({ verified: false });
 
-        const ownTrip = (await api().post('/trips/new').set(bearer(unverifiedOwner)).send(validTrip())).body.trip;
+        const ownTrip = (await api().post('/trips/new').set(signedIn(unverifiedOwner)).send(validTrip())).body.trip;
         const blocked = await api()
             .post(`/trips/${ownTrip}/invitations`)
-            .set(bearer(unverifiedOwner))
+            .set(signedIn(unverifiedOwner))
             .send({ user_id: unverifiedGuest.travelerId });
         assert.equal(blocked.status, 403);
         assert.match(blocked.body.error, /confirm your email/i);
 
-        const trip = (await api().post('/trips/new').set(bearer(verifiedOwner)).send(validTrip())).body.trip;
-        await api().post(`/trips/${trip}/invitations`).set(bearer(verifiedOwner)).send({ user_id: unverifiedGuest.travelerId });
-        const [invitation] = (await api().get('/invitations').set(bearer(unverifiedGuest))).body;
+        const trip = (await api().post('/trips/new').set(signedIn(verifiedOwner)).send(validTrip())).body.trip;
+        await api().post(`/trips/${trip}/invitations`).set(signedIn(verifiedOwner)).send({ user_id: unverifiedGuest.travelerId });
+        const [invitation] = (await api().get('/invitations').set(signedIn(unverifiedGuest))).body;
         assert.equal(
-            (await api().post(`/invitations/${invitation.invitation_id}/accept`).set(bearer(unverifiedGuest))).status,
+            (await api().post(`/invitations/${invitation.invitation_id}/accept`).set(signedIn(unverifiedGuest))).status,
             403
         );
         // Declining needs no verification.
         assert.equal(
-            (await api().post(`/invitations/${invitation.invitation_id}/decline`).set(bearer(unverifiedGuest))).status,
+            (await api().post(`/invitations/${invitation.invitation_id}/decline`).set(signedIn(unverifiedGuest))).status,
             204
         );
     });
@@ -136,8 +126,8 @@ describe('password reset', () => {
 
     it('sets a new password once, signs out other sessions and sends a notice', async () => {
         const account = await createAccount({ verified: false });
-        const otherDevice = oldToken(account);
-        assert.equal((await api().get('/auth/me').set('Authorization', `Bearer ${otherDevice}`)).status, 200);
+        const otherDevice = signedIn(account);
+        assert.equal((await api().get('/auth/me').set(otherDevice)).status, 200);
 
         await api().post('/auth/forgot-password').send({ email: account.email });
         const token = linkToken(await mailTo(account.email, /reset your password/i));
@@ -152,18 +142,18 @@ describe('password reset', () => {
         assert.equal((await api().post('/auth/reset-password').send({ token, password: 'another-password' })).status, 400);
 
         // Old sessions are signed out; the old password no longer works; the new one does.
-        assert.equal((await api().get('/auth/me').set('Authorization', `Bearer ${otherDevice}`)).status, 401);
+        assert.equal((await api().get('/auth/me').set(otherDevice)).status, 401);
         assert.equal((await api().post('/auth/login').send({ email: account.email, password: TEST_PASSWORD })).status, 401);
         const login = await api().post('/auth/login').send({ email: account.email, password: 'a-brand-new-password' });
         assert.equal(login.status, 200);
-        assert.equal((await api().get('/auth/me').set('Authorization', `Bearer ${login.body.token}`)).status, 200);
+        assert.equal((await api().get('/auth/me').set(sessionFrom(login))).status, 200);
 
         // Opening the emailed link proved the address.
         assert.equal(login.body.account.email_verified, true);
     });
 
     it('signs out a session started a moment before the reset, and after an earlier one', async () => {
-        // A token issued in the same second as the change used to survive it.
+        // A session started just before the change must not survive it.
         const account = await createAccount();
         const resetPassword = async (password) => {
             await api().post('/auth/forgot-password').send({ email: account.email });
@@ -173,10 +163,10 @@ describe('password reset', () => {
         };
 
         await resetPassword('first-new-password');
-        assert.equal((await api().get('/auth/me').set(bearer(account))).status, 401);
+        assert.equal((await api().get('/auth/me').set(signedIn(account))).status, 401);
 
         const login = await api().post('/auth/login').send({ email: account.email, password: 'first-new-password' });
-        const afterFirst = { Authorization: `Bearer ${login.body.token}` };
+        const afterFirst = sessionFrom(login);
         assert.equal((await api().get('/auth/me').set(afterFirst)).status, 200);
 
         await resetPassword('second-new-password');
@@ -212,7 +202,7 @@ describe('password reset', () => {
         const account = await createAccount();
         await api().post('/auth/forgot-password').send({ email: account.email });
         await mailTo(account.email, /reset your password/i);
-        await api().delete('/account').set(bearer(account)).send({ password: TEST_PASSWORD });
+        await api().delete('/account').set(signedIn(account)).send({ password: TEST_PASSWORD });
         assert.deepEqual(await knex('account_tokens').where({ account_id: account.id }), []);
     });
 });

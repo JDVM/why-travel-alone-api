@@ -1,14 +1,14 @@
 # A production-like stack on one machine: MySQL, the migrations, the API and
 # a mail catcher, all built and configured the way a real deployment is.
 #
-#   JWT_SECRET=$(openssl rand -hex 32) docker compose up --build
+#   APP_SECRET=$(openssl rand -hex 32) docker compose up --build
 #
 # API: http://localhost:8080    Emails sent: http://localhost:8025
 #
 # With the frontend checked out next to this repo (../why-travel-alone), add
 # the web app on http://localhost:3000:
 #
-#   JWT_SECRET=$(openssl rand -hex 32) docker compose --profile web up --build
+#   APP_SECRET=$(openssl rand -hex 32) docker compose --profile web up --build
 #
 # This file is for trying the deployment locally and for CI. The passwords
 # below are local-only defaults; a real deployment sets its own (DEPLOYMENT.md).
@@ -20,7 +20,7 @@ x-api-environment: &api-environment
   DB_LOCAL_DBNAME: wta
   DB_LOCAL_USER: wta
   DB_LOCAL_PASSWORD: ${DB_PASSWORD:-local-only-db-password}
-  JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET, e.g. JWT_SECRET=$(openssl rand -hex 32)}
+  APP_SECRET: ${APP_SECRET:?Set APP_SECRET, e.g. APP_SECRET=$(openssl rand -hex 32)}
   CORS_ORIGIN: http://localhost:3000
   APP_URL: http://localhost:3000
   # Mailpit catches every email instead of delivering it. It has no TLS, so

@@ -5,7 +5,8 @@ const reportError = require('../utils/reportError');
 const { emailTag } = require('../logger');
 const { TERMS_VERSION } = require('../config');
 const authenticate = require('../middleware/authenticate');
-const { hashPassword, verifyPassword, needsRehash, generateToken } = require('../utils/auth');
+const { hashPassword, verifyPassword, needsRehash } = require('../utils/auth');
+const { startSession, endSession, endAccountSessions } = require('../utils/sessions');
 const { normalizeEmail, isValidEmail, isPasswordTooLong, newPasswordError, nameError } = require('../utils/validate');
 const { travelerSummary } = require('../utils/travelers');
 const { issueAccountToken, consumeAccountToken } = require('../utils/accountTokens');
@@ -69,8 +70,8 @@ router.post('/register', async (req, res) => {
 
         req.log.info({ event: 'auth.register', accountId: account.id }, 'Account registered');
         inBackground(req, () => sendVerificationEmail(account), 'Error sending verification email');
-        const token = generateToken(account);
-        return res.status(201).json({ token, account });
+        await startSession(req, res, account.id);
+        return res.status(201).json({ account });
     } catch (error) {
         // Two concurrent registrations for the same email: the unique index wins.
         if (error.code === 'ER_DUP_ENTRY') {
@@ -117,14 +118,59 @@ router.post('/login', async (req, res) => {
         }
 
         req.log.info({ event: 'auth.login', accountId: account.id }, 'Logged in');
-        const token = generateToken(account);
+        await startSession(req, res, account.id);
         const traveler = await travelerSummary(account.id);
         return res.status(200).json({
-            token,
             account: { id: account.id, email: account.email, email_verified: account.email_verified_at !== null, traveler },
         });
     } catch (error) {
         reportError(req, error, 'Error logging in');
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Ends this browser's session. Works signed out too, so a stale cookie can
+// always be cleared.
+router.post('/logout', async (req, res) => {
+    try {
+        await endSession(req, res);
+        return res.status(204).end();
+    } catch (error) {
+        reportError(req, error, 'Error logging out');
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// The account's signed-in browsers and devices.
+router.get('/sessions', authenticate, async (req, res) => {
+    try {
+        const sessions = await knex('sessions')
+            .where({ account_id: req.account.accountId })
+            .where('expires_at', '>', new Date())
+            .orderBy('last_seen_at', 'desc')
+            .select('id', 'user_agent', 'created_at', 'last_seen_at');
+        return res.status(200).json(
+            sessions.map(({ id, ...session }) => ({
+                // A short public handle; the full hash stays on the server.
+                id: id.slice(0, 16),
+                ...session,
+                current: id === req.account.sessionId,
+            }))
+        );
+    } catch (error) {
+        reportError(req, error, 'Error listing sessions');
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Signs out every other browser and device.
+router.delete('/sessions', authenticate, async (req, res) => {
+    try {
+        const ended = await endAccountSessions(req.account.accountId, { except: req.account.sessionId });
+        req.log.info({ event: 'auth.sessions_ended', accountId: req.account.accountId, ended }, 'Signed out other sessions');
+        return res.status(200).json({ ended });
+    } catch (error) {
+        reportError(req, error, 'Error ending sessions');
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -201,7 +247,7 @@ router.post('/forgot-password', (req, res) => {
 });
 
 // Sets a new password from the link in the reset email. Every existing
-// session is signed out (see authenticate), and opening the emailed link also
+// session is ended, and opening the emailed link also
 // proves the address, so it counts as verified.
 router.post('/reset-password', async (req, res) => {
     const { token, password } = req.body || {};
@@ -226,6 +272,8 @@ router.post('/reset-password', async (req, res) => {
                     email_verified_at: trx.raw('COALESCE(email_verified_at, ?)', [now]),
                 });
             await trx('account_tokens').where({ account_id: accountId }).whereNull('used_at').del();
+            // Whoever knew the old password is signed out everywhere.
+            await trx('sessions').where({ account_id: accountId }).del();
             return trx('accounts').where({ id: accountId }).first('id', 'email');
         });
         if (!account) {

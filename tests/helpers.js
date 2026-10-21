@@ -4,7 +4,8 @@ const { after } = require('node:test');
 const supertest = require('supertest');
 const createApp = require('../app');
 const knex = require('../db');
-const { hashPassword, generateToken } = require('../utils/auth');
+const { hashPassword } = require('../utils/auth');
+const { COOKIE_NAME, hashId, MAX_AGE_MS } = require('../utils/sessions');
 const { TERMS_VERSION } = require('../config');
 
 // Each test file runs in its own process; close its connection pool at the end.
@@ -22,8 +23,27 @@ function api(env) {
 const TEST_PASSWORD = 'test-password-123';
 let sharedHash;
 
-// Creates an account directly in the database and returns it with a valid
-// token. Faster than registering through the API, and doesn't count against
+// The web app's origin in tests (the default CORS_ORIGIN). Requests that
+// change something must come from it.
+const ORIGIN = 'http://localhost:3000';
+
+// Starts a session for the account directly in the database and returns the
+// value of its cookie.
+async function startTestSession(accountId) {
+    const sessionId = crypto.randomBytes(32).toString('base64url');
+    const now = new Date();
+    await knex('sessions').insert({
+        id: hashId(sessionId),
+        account_id: accountId,
+        user_agent: 'tests',
+        created_at: now,
+        last_seen_at: now,
+        expires_at: new Date(now.getTime() + MAX_AGE_MS),
+    });
+    return sessionId;
+}
+
+// Creates an account directly in the database and returns it signed in. Faster than registering through the API, and doesn't count against
 // the registration rate limit. Like a real signup it gets a traveler profile
 // (with private details), unless { profile: false } asks for an older,
 // profile-less account. Its email is verified unless { verified: false }.
@@ -51,15 +71,26 @@ async function createAccount({ profile = true, verified = true } = {}) {
             sensitive_consent_at: new Date(),
         });
     }
-    return { id, email, travelerId, token: generateToken({ id, email }) };
+    return { id, email, travelerId, session: await startTestSession(id) };
 }
 
-function bearer(account) {
-    return { Authorization: `Bearer ${account.token}` };
+// Request headers for a signed-in browser on the web app.
+function signedIn(account) {
+    return { Cookie: `${COOKIE_NAME}=${account.session}`, Origin: ORIGIN };
 }
 
-function demoToken() {
-    return { Authorization: `Bearer ${generateToken({ id: DEMO.id, email: DEMO.email })}` };
+// The same, using the session a login or registration response started.
+function sessionFrom(res) {
+    const setCookie = (res.headers['set-cookie'] || []).find((c) => c.startsWith(`${COOKIE_NAME}=`));
+    if (!setCookie) {
+        throw new Error('No session cookie in the response');
+    }
+    return { Cookie: setCookie.split(';')[0], Origin: ORIGIN };
+}
+
+// Signed in as the seeded demo account.
+async function demoSession() {
+    return signedIn({ session: await startTestSession(DEMO.id) });
 }
 
 const validTrip = (overrides = {}) => ({
@@ -71,4 +102,4 @@ const validTrip = (overrides = {}) => ({
     ...overrides,
 });
 
-module.exports = { api, knex, DEMO, TEST_PASSWORD, createAccount, bearer, demoToken, validTrip };
+module.exports = { api, knex, DEMO, ORIGIN, TEST_PASSWORD, createAccount, signedIn, sessionFrom, demoSession, validTrip };

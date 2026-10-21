@@ -2,7 +2,13 @@
 // deployment fails immediately with a clear message instead of on the first
 // request that needs the missing value.
 
-const MIN_JWT_SECRET_LENGTH = 32;
+const MIN_SECRET_LENGTH = 32;
+
+// The server's own secret, used to key the email tags in the logs.
+// JWT_SECRET is its old name, from before sessions replaced tokens.
+function appSecret(env = process.env) {
+    return env.APP_SECRET || env.JWT_SECRET;
+}
 
 // The version of the terms and privacy policy new accounts accept, stored with
 // each account. Change it whenever the published documents change.
@@ -12,9 +18,10 @@ const DEFAULT_CORS_ORIGIN = 'http://localhost:3000';
 function configErrors(env = process.env) {
     const errors = [];
 
-    if (!env.JWT_SECRET || env.JWT_SECRET.length < MIN_JWT_SECRET_LENGTH) {
+    const secret = appSecret(env);
+    if (!secret || secret.length < MIN_SECRET_LENGTH) {
         errors.push(
-            `JWT_SECRET must be at least ${MIN_JWT_SECRET_LENGTH} characters. Generate one with: openssl rand -hex 32`
+            `APP_SECRET must be at least ${MIN_SECRET_LENGTH} characters. Generate one with: openssl rand -hex 32`
         );
     }
     if (env.NODE_ENV === 'production' && !env.CORS_ORIGIN) {
@@ -61,4 +68,4 @@ function trustProxy(env = process.env) {
     return /^\d+$/.test(value) ? Number(value) : value;
 }
 
-module.exports = { configErrors, corsOrigins, trustProxy, MIN_JWT_SECRET_LENGTH, TERMS_VERSION };
+module.exports = { configErrors, corsOrigins, trustProxy, appSecret, MIN_SECRET_LENGTH, TERMS_VERSION };

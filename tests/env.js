@@ -17,6 +17,6 @@ if (testDb === process.env.DB_LOCAL_DBNAME) {
 
 process.env.DB_LOCAL_DBNAME = testDb;
 process.env.NODE_ENV = 'test';
-if (!process.env.JWT_SECRET) {
-    process.env.JWT_SECRET = 'test-only-secret-that-is-at-least-32-characters';
+if (!process.env.APP_SECRET && !process.env.JWT_SECRET) {
+    process.env.APP_SECRET = 'test-only-secret-that-is-at-least-32-characters';
 }

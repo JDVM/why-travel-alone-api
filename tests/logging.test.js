@@ -6,7 +6,7 @@ const supertest = require('supertest');
 const createApp = require('../app');
 const { createLogger, emailTag } = require('../logger');
 const { scrubEvent, initMonitoring } = require('../monitoring');
-const { createAccount, bearer, DEMO } = require('./helpers');
+const { createAccount, signedIn, DEMO } = require('./helpers');
 
 // An app whose logs are captured as parsed JSON lines.
 function loggedApp() {
@@ -28,7 +28,7 @@ describe('request logging', () => {
         const account = await createAccount();
         const { request, lines } = loggedApp();
 
-        const res = await request.get('/trips').set(bearer(account));
+        const res = await request.get('/trips').set(signedIn(account));
         assert.equal(res.status, 200);
 
         const line = lines.find((l) => l.msg === 'request completed');
@@ -38,7 +38,7 @@ describe('request logging', () => {
         assert.equal(line.res.statusCode, 200);
         assert.equal(line.accountId, account.id);
         assert.equal(typeof line.responseTime, 'number');
-        assert.ok(!JSON.stringify(lines).includes(account.token), 'token never logged');
+        assert.ok(!JSON.stringify(lines).includes(account.session), 'session id never logged');
     });
 
     test('gives every response a request id, reusing a well-formed incoming one', async () => {
@@ -113,8 +113,8 @@ describe('auth events', () => {
         assert.equal(emailTag('A@Example.com'), emailTag('a@example.com'));
         assert.notEqual(emailTag('a@example.com'), emailTag('b@example.com'));
         assert.notEqual(
-            emailTag('a@example.com', { JWT_SECRET: 'one-secret' }),
-            emailTag('a@example.com', { JWT_SECRET: 'another-secret' })
+            emailTag('a@example.com', { APP_SECRET: 'one-secret' }),
+            emailTag('a@example.com', { APP_SECRET: 'another-secret' })
         );
     });
 });
