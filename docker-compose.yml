@@ -30,6 +30,9 @@ x-api-environment: &api-environment
   SMTP_REQUIRE_TLS: "false"
   MAIL_FROM: Why Travel Alone <no-reply@localhost>
   LOG_LEVEL: ${LOG_LEVEL:-info}
+  # The end-to-end tests set TRUST_PROXY=1 and give each test user its own
+  # X-Forwarded-For address, so the rate limits treat them as separate clients.
+  TRUST_PROXY: ${TRUST_PROXY:-}
 
 services:
   db:
