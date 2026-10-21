@@ -47,9 +47,17 @@ function needsRehash(hash) {
     return bcrypt.getRounds(hash) < SALT_ROUNDS;
 }
 
+// Which password a token was issued under: the time it was last changed, in
+// milliseconds (0 if never). authenticate rejects a token once this no longer
+// matches, so changing a password signs out every earlier session, even one
+// started a moment before.
+function passwordVersion(account) {
+    return account.password_changed_at ? new Date(account.password_changed_at).getTime() : 0;
+}
+
 function generateToken(account) {
     return jwt.sign(
-        { accountId: account.id, email: account.email },
+        { accountId: account.id, email: account.email, pwv: passwordVersion(account) },
         getSecret(),
         { expiresIn: TOKEN_EXPIRY, algorithm: JWT_ALGORITHM }
     );
@@ -59,4 +67,4 @@ function verifyToken(token) {
     return jwt.verify(token, getSecret(), { algorithms: [JWT_ALGORITHM] });
 }
 
-module.exports = { hashPassword, verifyPassword, needsRehash, generateToken, verifyToken };
+module.exports = { hashPassword, verifyPassword, needsRehash, generateToken, verifyToken, passwordVersion };

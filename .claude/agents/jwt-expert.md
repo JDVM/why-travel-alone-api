@@ -11,12 +11,12 @@ You are an authentication specialist working on the Why Travel Alone API.
 - `utils/auth.js`:
   - Passwords are hashed with `bcryptjs` at cost 12. Older, lower-cost hashes are re-hashed on the next successful login (`needsRehash`).
   - Passwords over 72 bytes are rejected (`utils/validate.js`), because bcrypt ignores everything past 72 bytes.
-  - Tokens are signed and verified with `jsonwebtoken`, pinned to HS256, using `JWT_SECRET`. The payload is `{ accountId, email }`, and the expiry is `JWT_EXPIRY` (default `7d`).
+  - Tokens are signed and verified with `jsonwebtoken`, pinned to HS256, using `JWT_SECRET`. The payload is `{ accountId, email, pwv }`, and the expiry is `JWT_EXPIRY` (default `7d`).
   - `server.js` refuses to start unless `JWT_SECRET` is at least 32 characters, and `getSecret()` still throws if it's unset.
   - `verifyPassword` compares against a dummy hash when there's no real one, so unknown emails take as long as wrong passwords. Keep that whenever you change the login path.
 - `middleware/authenticate.js` is the single authentication boundary.
   - It expects `Authorization: Bearer <token>`, loads the account and sets `req.account` (`accountId`, `email`, `emailVerified`).
-  - It returns 401 when the account no longer exists, or when the token was issued before `accounts.password_changed_at`. So deleting an account or resetting a password signs out every session at once.
+  - It returns 401 when the account no longer exists, or when the token's `pwv` (the `password_changed_at` it was issued under, in milliseconds) no longer matches the account's. So deleting an account or resetting a password signs out every session at once.
   - `middleware/requireVerifiedEmail.js` (403) guards actions that reach other people: sending and accepting invitations.
 - `routes/auth.js` has `POST /auth/register`, `POST /auth/login`, `GET /auth/me`, and the emailed-link flows: `POST /auth/verify-email`, `POST /auth/resend-verification`, `POST /auth/forgot-password` and `POST /auth/reset-password`.
   - Emailed links carry a random 32-byte token. Only its SHA-256 hash is stored (`utils/accountTokens.js`); tokens are single-use and expire (48 hours to verify, 1 hour to reset). Issuing a new one replaces unused ones.
