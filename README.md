@@ -51,6 +51,10 @@ The tests run against a real MySQL database, separate from your development one,
 
 GitHub Actions runs the same tests against MySQL 8 on every pull request (`.github/workflows/ci.yml`).
 
+### Browser tests
+
+The web app's repository has Playwright tests that drive a real browser through the whole stack. CI runs them on every pull request here too (the `e2e` job), against the web app's branch with the same name if there is one, otherwise its `main`. So give a change that spans both repositories the same branch name in each. See that repository's README to run them locally.
+
 ### Logs and error reporting
 
 - The API writes JSON logs to stdout, one line per event, for the hosting platform to collect. `LOG_LEVEL` sets the detail (`info` by default; tests are silent). To read them locally, pipe through `npx pino-pretty`.

@@ -162,6 +162,27 @@ describe('password reset', () => {
         assert.equal(login.body.account.email_verified, true);
     });
 
+    it('signs out a session started a moment before the reset, and after an earlier one', async () => {
+        // A token issued in the same second as the change used to survive it.
+        const account = await createAccount();
+        const resetPassword = async (password) => {
+            await api().post('/auth/forgot-password').send({ email: account.email });
+            const count = outbox.filter((m) => m.to === account.email && /reset your password/i.test(m.subject)).length;
+            const token = linkToken(await mailTo(account.email, /reset your password/i, { count: count + 1 }));
+            assert.equal((await api().post('/auth/reset-password').send({ token, password })).status, 200);
+        };
+
+        await resetPassword('first-new-password');
+        assert.equal((await api().get('/auth/me').set(bearer(account))).status, 401);
+
+        const login = await api().post('/auth/login').send({ email: account.email, password: 'first-new-password' });
+        const afterFirst = { Authorization: `Bearer ${login.body.token}` };
+        assert.equal((await api().get('/auth/me').set(afterFirst)).status, 200);
+
+        await resetPassword('second-new-password');
+        assert.equal((await api().get('/auth/me').set(afterFirst)).status, 401);
+    });
+
     it('rejects expired and wrong-purpose links', async () => {
         const { email } = await register();
         const verifyToken = linkToken(await mailTo(email, /confirm your email/i));

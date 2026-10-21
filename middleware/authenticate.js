@@ -1,5 +1,5 @@
 const knex = require('../db');
-const { verifyToken } = require('../utils/auth');
+const { verifyToken, passwordVersion } = require('../utils/auth');
 
 // The single authentication boundary for the app.
 //
@@ -31,11 +31,9 @@ async function authenticate(req, res, next) {
         const account = await knex('accounts')
             .where({ id: payload.accountId })
             .first('id', 'email', 'email_verified_at', 'password_changed_at');
-        // iat is in whole seconds; a token from the same second as the change is kept.
-        const issuedBeforeChange =
-            account &&
-            account.password_changed_at &&
-            payload.iat < Math.floor(new Date(account.password_changed_at).getTime() / 1000);
+        // Issued under an earlier password (tokens from before this check have
+        // no pwv, which counts as "never changed").
+        const issuedBeforeChange = account && (payload.pwv || 0) !== passwordVersion(account);
         if (!account || issuedBeforeChange) {
             return res.status(401).json({ error: 'Invalid or expired token' });
         }
