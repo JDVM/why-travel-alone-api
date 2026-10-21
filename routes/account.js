@@ -6,6 +6,7 @@ const authenticate = require("../middleware/authenticate");
 const { verifyPassword } = require("../utils/auth");
 const { isPasswordTooLong } = require("../utils/validate");
 const { travelerIdFor } = require("../utils/travelers");
+const { COOKIE_NAME, cookieOptions } = require("../utils/sessions");
 
 // The caller's rights over their own data: a copy of it (GDPR Art. 15 and 20)
 // and erasure (Art. 17).
@@ -145,6 +146,8 @@ router.delete("/", async (req, res) => {
             await trx("accounts").where("id", accountId).del();
         });
         req.log.info({ event: "account.deleted", accountId }, "Account deleted");
+        // The session rows went with the account; clear this browser's cookie.
+        res.clearCookie(COOKIE_NAME, cookieOptions());
         return res.status(204).end();
     } catch (error) {
         reportError(req, error, "Error deleting account");

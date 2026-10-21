@@ -4,16 +4,17 @@ const assert = require('node:assert/strict');
 const { configErrors, corsOrigins, trustProxy } = require('../config');
 const { parseId, validateTripInput, newPasswordError, isValidEmail, normalizeEmail } = require('../utils/validate');
 
-const goodEnv = { JWT_SECRET: 'x'.repeat(32), DB_LOCAL_DBNAME: 'db', DB_LOCAL_USER: 'user' };
+const goodEnv = { APP_SECRET: 'x'.repeat(32), DB_LOCAL_DBNAME: 'db', DB_LOCAL_USER: 'user' };
 
 describe('configErrors', () => {
     it('accepts a complete development environment', () => {
         assert.deepEqual(configErrors(goodEnv), []);
     });
 
-    it('requires a JWT_SECRET of at least 32 characters', () => {
-        assert.match(configErrors({ ...goodEnv, JWT_SECRET: undefined })[0], /JWT_SECRET/);
-        assert.match(configErrors({ ...goodEnv, JWT_SECRET: 'x'.repeat(31) })[0], /JWT_SECRET/);
+    it('requires an APP_SECRET of at least 32 characters, accepting its old name JWT_SECRET', () => {
+        assert.match(configErrors({ ...goodEnv, APP_SECRET: undefined })[0], /APP_SECRET/);
+        assert.match(configErrors({ ...goodEnv, APP_SECRET: 'x'.repeat(31) })[0], /APP_SECRET/);
+        assert.deepEqual(configErrors({ ...goodEnv, APP_SECRET: undefined, JWT_SECRET: 'y'.repeat(32) }), []);
     });
 
     it('requires CORS_ORIGIN and the mail settings in production only', () => {
@@ -39,7 +40,7 @@ describe('configErrors', () => {
     });
 
     it('requires the database name and user', () => {
-        const errors = configErrors({ JWT_SECRET: 'x'.repeat(32) });
+        const errors = configErrors({ APP_SECRET: 'x'.repeat(32) });
         assert.equal(errors.length, 2);
     });
 });

@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { api, knex, createAccount, bearer, validTrip } = require('./helpers');
+const { api, knex, createAccount, signedIn, validTrip } = require('./helpers');
 
 const fullProfile = (overrides = {}) => ({
     first_name: 'Rosa',
@@ -21,7 +21,7 @@ describe('profile', () => {
 
     it('returns your whole profile, including private fields', async () => {
         const account = await createAccount();
-        const res = await api().get('/profile').set(bearer(account));
+        const res = await api().get('/profile').set(signedIn(account));
         assert.equal(res.status, 200);
         assert.equal(res.body.user_id, account.travelerId);
         assert.equal(res.body.special_considerations, 'Private note');
@@ -30,7 +30,7 @@ describe('profile', () => {
 
     it('replaces the profile, de-duplicating preferred destinations', async () => {
         const account = await createAccount();
-        const res = await api().put('/profile').set(bearer(account)).send(fullProfile());
+        const res = await api().put('/profile').set(signedIn(account)).send(fullProfile());
         assert.equal(res.status, 200);
         assert.equal(res.body.first_name, 'Rosa');
         assert.equal(res.body.has_kids, 1);
@@ -39,7 +39,7 @@ describe('profile', () => {
         assert.deepEqual(res.body.preferred_destinations.map((d) => d.id).sort(), [1, 3]);
 
         // Omitted optional fields are cleared.
-        const cleared = await api().put('/profile').set(bearer(account)).send({ first_name: 'Rosa', last_name: 'Diaz' });
+        const cleared = await api().put('/profile').set(signedIn(account)).send({ first_name: 'Rosa', last_name: 'Diaz' });
         assert.equal(cleared.body.has_kids, 0);
         assert.equal(cleared.body.type_of_travel_id, null);
         assert.equal(cleared.body.special_considerations, null);
@@ -54,13 +54,13 @@ describe('profile', () => {
         for (const special_considerations_consent of [undefined, false, 'true']) {
             const res = await api()
                 .put('/profile')
-                .set(bearer(account))
+                .set(signedIn(account))
                 .send(fullProfile({ special_considerations_consent }));
             assert.equal(res.status, 400, String(special_considerations_consent));
             assert.match(res.body.error, /agree/);
         }
 
-        const saved = await api().put('/profile').set(bearer(account)).send(fullProfile());
+        const saved = await api().put('/profile').set(signedIn(account)).send(fullProfile());
         assert.equal(saved.status, 200);
         assert.equal(saved.body.special_considerations_consent, true);
         assert.equal('sensitive_consent_at' in saved.body, false);
@@ -68,13 +68,13 @@ describe('profile', () => {
         assert.ok(firstConsent);
 
         // Saving again keeps the original consent time.
-        await api().put('/profile').set(bearer(account)).send(fullProfile({ special_considerations: 'Vegan' }));
+        await api().put('/profile').set(signedIn(account)).send(fullProfile({ special_considerations: 'Vegan' }));
         assert.deepEqual(await consentAt(), firstConsent);
 
         // Without special considerations, no consent is needed and none is kept.
         const cleared = await api()
             .put('/profile')
-            .set(bearer(account))
+            .set(signedIn(account))
             .send(fullProfile({ special_considerations: '  ', special_considerations_consent: undefined }));
         assert.equal(cleared.status, 200);
         assert.equal(cleared.body.special_considerations, null);
@@ -96,20 +96,20 @@ describe('profile', () => {
             { preferred_destination_ids: Array.from({ length: 21 }, (_, i) => i + 1) },
         ];
         for (const overrides of cases) {
-            const res = await api().put('/profile').set(bearer(account)).send(fullProfile(overrides));
+            const res = await api().put('/profile').set(signedIn(account)).send(fullProfile(overrides));
             assert.equal(res.status, 400, JSON.stringify(overrides));
         }
     });
 
     it('creates a profile for an older account that has none, which can then plan trips', async () => {
         const legacy = await createAccount({ profile: false });
-        assert.equal((await api().get('/profile').set(bearer(legacy))).status, 404);
+        assert.equal((await api().get('/profile').set(signedIn(legacy))).status, 404);
 
-        const res = await api().put('/profile').set(bearer(legacy)).send(fullProfile());
+        const res = await api().put('/profile').set(signedIn(legacy)).send(fullProfile());
         assert.equal(res.status, 200);
-        assert.equal((await api().post('/trips/new').set(bearer(legacy)).send(validTrip())).status, 201);
+        assert.equal((await api().post('/trips/new').set(signedIn(legacy)).send(validTrip())).status, 201);
 
-        const me = (await api().get('/auth/me').set(bearer(legacy))).body;
+        const me = (await api().get('/auth/me').set(signedIn(legacy))).body;
         assert.equal(me.traveler.user_id, res.body.user_id);
     });
 });

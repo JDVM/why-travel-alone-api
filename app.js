@@ -9,6 +9,7 @@ const { corsOrigins, trustProxy } = require('./config');
 const { logger: defaultLogger } = require('./logger');
 const reportError = require('./utils/reportError');
 const errorHandler = require('./middleware/errorHandler');
+const trustedOrigin = require('./middleware/trustedOrigin');
 const authRoutes = require('./routes/auth');
 const travelerRoutes = require('./routes/travelers');
 const tripsRoutes = require('./routes/trips');
@@ -72,8 +73,10 @@ function createApp(env = process.env, { logger = defaultLogger } = {}) {
         },
     }));
     app.use(helmet());
-    app.use(cors({ origin: corsOrigins(env) }));
+    // credentials: the web app's requests carry the session cookie.
+    app.use(cors({ origin: corsOrigins(env), credentials: true }));
     app.use(express.json({ limit: '10kb' }));
+    app.use(trustedOrigin(corsOrigins(env)));
 
     // Password guessing: only failed attempts count, so normal use never hits it.
     app.use('/auth/login', rateLimit({

@@ -1,21 +1,7 @@
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 
 const SALT_ROUNDS = 12;
-const TOKEN_EXPIRY = process.env.JWT_EXPIRY || '7d';
-// Pinned so a token can't choose its own verification algorithm.
-const JWT_ALGORITHM = 'HS256';
-
-// Read the secret lazily so the app can boot (e.g. run migrations) without it,
-// and fail loudly the moment we actually try to sign or verify a token.
-function getSecret() {
-    const secret = process.env.JWT_SECRET;
-    if (!secret) {
-        throw new Error('JWT_SECRET is not set. Refusing to sign or verify tokens without it.');
-    }
-    return secret;
-}
 
 function hashPassword(plain) {
     return bcrypt.hash(plain, SALT_ROUNDS);
@@ -47,24 +33,4 @@ function needsRehash(hash) {
     return bcrypt.getRounds(hash) < SALT_ROUNDS;
 }
 
-// Which password a token was issued under: the time it was last changed, in
-// milliseconds (0 if never). authenticate rejects a token once this no longer
-// matches, so changing a password signs out every earlier session, even one
-// started a moment before.
-function passwordVersion(account) {
-    return account.password_changed_at ? new Date(account.password_changed_at).getTime() : 0;
-}
-
-function generateToken(account) {
-    return jwt.sign(
-        { accountId: account.id, email: account.email, pwv: passwordVersion(account) },
-        getSecret(),
-        { expiresIn: TOKEN_EXPIRY, algorithm: JWT_ALGORITHM }
-    );
-}
-
-function verifyToken(token) {
-    return jwt.verify(token, getSecret(), { algorithms: [JWT_ALGORITHM] });
-}
-
-module.exports = { hashPassword, verifyPassword, needsRehash, generateToken, verifyToken, passwordVersion };
+module.exports = { hashPassword, verifyPassword, needsRehash };

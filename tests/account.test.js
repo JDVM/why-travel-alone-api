@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { api, knex, TEST_PASSWORD, createAccount, bearer, validTrip } = require('./helpers');
+const { api, knex, TEST_PASSWORD, createAccount, signedIn, validTrip } = require('./helpers');
 
 // owner owns a trip that member has joined; member owns a trip of their own
 // and has a pending invitation to a third trip.
@@ -9,17 +9,17 @@ async function setup() {
     const member = await createAccount();
     const other = await createAccount();
 
-    const sharedTrip = (await api().post('/trips/new').set(bearer(owner)).send(validTrip({ trip_name: 'Shared trip' })))
+    const sharedTrip = (await api().post('/trips/new').set(signedIn(owner)).send(validTrip({ trip_name: 'Shared trip' })))
         .body.trip;
-    await api().post(`/trips/${sharedTrip}/invitations`).set(bearer(owner)).send({ user_id: member.travelerId });
-    const [invitation] = (await api().get('/invitations').set(bearer(member))).body;
-    await api().post(`/invitations/${invitation.invitation_id}/accept`).set(bearer(member));
+    await api().post(`/trips/${sharedTrip}/invitations`).set(signedIn(owner)).send({ user_id: member.travelerId });
+    const [invitation] = (await api().get('/invitations').set(signedIn(member))).body;
+    await api().post(`/invitations/${invitation.invitation_id}/accept`).set(signedIn(member));
 
-    const ownTrip = (await api().post('/trips/new').set(bearer(member)).send(validTrip({ trip_name: 'Own trip' }))).body
+    const ownTrip = (await api().post('/trips/new').set(signedIn(member)).send(validTrip({ trip_name: 'Own trip' }))).body
         .trip;
-    const pendingTrip = (await api().post('/trips/new').set(bearer(other)).send(validTrip({ trip_name: 'Pending trip' })))
+    const pendingTrip = (await api().post('/trips/new').set(signedIn(other)).send(validTrip({ trip_name: 'Pending trip' })))
         .body.trip;
-    await api().post(`/trips/${pendingTrip}/invitations`).set(bearer(other)).send({ user_id: member.travelerId });
+    await api().post(`/trips/${pendingTrip}/invitations`).set(signedIn(other)).send({ user_id: member.travelerId });
 
     return { owner, member, other, sharedTrip, ownTrip, pendingTrip };
 }
@@ -31,9 +31,9 @@ describe('data export', () => {
 
     it("downloads the caller's own data and nothing private about anyone else", async () => {
         const { owner, member, ownTrip, sharedTrip } = await setup();
-        await api().post(`/trips/${ownTrip}/invitations`).set(bearer(member)).send({ user_id: owner.travelerId });
+        await api().post(`/trips/${ownTrip}/invitations`).set(signedIn(member)).send({ user_id: owner.travelerId });
 
-        const res = await api().get('/account/export').set(bearer(member));
+        const res = await api().get('/account/export').set(signedIn(member));
         assert.equal(res.status, 200);
         assert.match(res.headers['content-disposition'], /attachment; filename="why-travel-alone-data-\d{4}-\d{2}-\d{2}\.json"/);
         assert.equal(res.headers['cache-control'], 'no-store');
@@ -71,7 +71,7 @@ describe('data export', () => {
 
     it('works for an older account without a traveler profile', async () => {
         const legacy = await createAccount({ profile: false });
-        const res = await api().get('/account/export').set(bearer(legacy));
+        const res = await api().get('/account/export').set(signedIn(legacy));
         assert.equal(res.status, 200);
         assert.equal(res.body.profile, null);
         assert.deepEqual(res.body.trips_joined, []);
@@ -82,9 +82,9 @@ describe('account deletion', () => {
     it('requires a login and the password', async () => {
         const account = await createAccount();
         assert.equal((await api().delete('/account').send({ password: TEST_PASSWORD })).status, 401);
-        assert.equal((await api().delete('/account').set(bearer(account)).send({})).status, 400);
+        assert.equal((await api().delete('/account').set(signedIn(account)).send({})).status, 400);
 
-        const wrong = await api().delete('/account').set(bearer(account)).send({ password: 'not-the-password' });
+        const wrong = await api().delete('/account').set(signedIn(account)).send({ password: 'not-the-password' });
         assert.equal(wrong.status, 403);
         assert.ok(await knex('accounts').where('id', account.id).first());
     });
@@ -92,7 +92,7 @@ describe('account deletion', () => {
     it('deletes the account, its profile, its trips and its memberships, and leaves other trips alone', async () => {
         const { owner, member, sharedTrip, ownTrip, pendingTrip } = await setup();
 
-        const res = await api().delete('/account').set(bearer(member)).send({ password: TEST_PASSWORD });
+        const res = await api().delete('/account').set(signedIn(member)).send({ password: TEST_PASSWORD });
         assert.equal(res.status, 204);
 
         assert.equal(await knex('accounts').where('id', member.id).first(), undefined);
@@ -102,13 +102,13 @@ describe('account deletion', () => {
         assert.deepEqual(await knex('trip_invitations').where('user_id', member.travelerId), []);
 
         // The trips they had joined or been invited to still exist, without them.
-        const shared = (await api().get(`/trips/${sharedTrip}`).set(bearer(owner))).body;
+        const shared = (await api().get(`/trips/${sharedTrip}`).set(signedIn(owner))).body;
         assert.deepEqual(shared.users.map((user) => user.user_id), [owner.travelerId]);
         assert.ok(await knex('trips').where('id', pendingTrip).first());
 
         // Their token stops working at once, and they can't log in again.
-        assert.equal((await api().get('/auth/me').set(bearer(member))).status, 401);
-        assert.equal((await api().get('/travelers').set(bearer(member))).status, 401);
+        assert.equal((await api().get('/auth/me').set(signedIn(member))).status, 401);
+        assert.equal((await api().get('/travelers').set(signedIn(member))).status, 401);
         const login = await api().post('/auth/login').send({ email: member.email, password: TEST_PASSWORD });
         assert.equal(login.status, 401);
     });
@@ -117,8 +117,8 @@ describe('account deletion', () => {
         const account = await createAccount();
         const app = api();
         for (let i = 0; i < 10; i += 1) {
-            assert.equal((await app.delete('/account').set(bearer(account)).send({ password: 'wrong-password' })).status, 403);
+            assert.equal((await app.delete('/account').set(signedIn(account)).send({ password: 'wrong-password' })).status, 403);
         }
-        assert.equal((await app.delete('/account').set(bearer(account)).send({ password: TEST_PASSWORD })).status, 429);
+        assert.equal((await app.delete('/account').set(signedIn(account)).send({ password: TEST_PASSWORD })).status, 429);
     });
 });

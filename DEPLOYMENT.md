@@ -31,8 +31,9 @@ You need:
 | --- | --- | --- |
 | `NODE_ENV` | yes | `production` (set in the image). |
 | `PORT` | no | Defaults to 8080 in the image. Most hosts set it. |
-| `JWT_SECRET` | yes | At least 32 random characters: `openssl rand -hex 32`. Changing it signs everyone out. |
-| `JWT_EXPIRY` | no | Login lifetime, default `7d`. |
+| `APP_SECRET` | yes | At least 32 random characters: `openssl rand -hex 32`. Keys the email tags in the logs. (`JWT_SECRET`, its old name, still works.) |
+| `COOKIE_SECURE` | no | Leave unset (the session cookie is HTTPS-only). `false` only for a plain-http test setup that isn't localhost. |
+| `COOKIE_DOMAIN` | no | Leave unset: the cookie belongs to the API's host, which is what you want. |
 | `CORS_ORIGIN` | yes | The web app's exact origin, e.g. `https://app.example.com` (comma-separate several). |
 | `APP_URL` | yes | The web app's URL, used in email links. Must be `https://`. |
 | `TRUST_PROXY` | yes, behind a proxy | Number of proxies in front of the API, usually `1`. Without it, every client shares one rate limit. |
@@ -69,13 +70,14 @@ Runtime environment variables for the web container, used in its Content-Securit
 
 ### Secrets
 
-Keep `JWT_SECRET`, `DB_LOCAL_PASSWORD`, `SMTP_PASS` and the DSNs in the host's
+Keep `APP_SECRET`, `DB_LOCAL_PASSWORD`, `SMTP_PASS` and the DSNs in the host's
 secret store, never in the repository or the image. (`.dockerignore` keeps
 `.env` files out of builds.) Use separate values for staging and production.
 
 To rotate:
 
-- **`JWT_SECRET`:** set a new value and redeploy. Everyone has to log in again.
+- **`APP_SECRET`:** set a new value and redeploy. Nobody is signed out; only new log lines get different email tags.
+- **Sign everyone out** (e.g. after a suspected breach): `DELETE FROM sessions;`.
 - **Database or SMTP password:** create the new credential, update the secret, redeploy, then revoke the old one.
 
 ## First deployment
@@ -141,6 +143,8 @@ those backups expire, as the privacy policy says.
 
 ## HTTPS, proxies and headers
 
+- **Same site for the web app and the API.** Logins use an httpOnly session cookie that belongs to the API's host. Browsers only send it on the web app's API calls when both are on the same site, meaning the same registrable domain: `app.example.com` and `api.example.com` work, while `myapp.netlify.app` and `myapi.onrender.com` do not. Give both services hostnames under your own domain.
+- **Requests that change something** must come from `CORS_ORIGIN`. The API checks the browser's `Origin` header, on top of the cookie's SameSite setting, to block cross-site request forgery.
 - **TLS** is terminated by the host's load balancer.
   - The API sends HSTS and the other helmet headers.
   - The web container sends a strict Content-Security-Policy (no inline scripts, API calls only to `API_ORIGIN`), HSTS, `X-Frame-Options: DENY` and a no-referrer-leak policy.
@@ -172,7 +176,7 @@ those backups expire, as the privacy policy says.
   - `DraftNotice` is removed from the web app (`src/pages/Legal/legal.tsx`).
   - `LEGAL_VERSION` (web) and `TERMS_VERSION` (`config.js`) are equal.
 - [ ] **Processors:** data processing agreements are in place with the host, database, SMTP and Sentry providers, and the privacy policy lists them with their regions.
-- [ ] **Accounts:** a production `JWT_SECRET` is generated and stored as a secret; no development values are reused.
+- [ ] **Accounts:** a production `APP_SECRET` is generated and stored as a secret; no development values are reused.
 - [ ] **Network:** `CORS_ORIGIN`, `APP_URL`, `TRUST_PROXY`, `REACT_APP_API_BASE_URL` and `API_ORIGIN` are set to the real addresses.
 - [ ] **Database:** TLS on (`DB_SSL=true`), automated backups and point-in-time recovery on, and a restore drill done.
 - [ ] **Email:** SPF, DKIM and DMARC pass. Verification and reset emails arrive in the inbox, not spam.
@@ -189,9 +193,9 @@ migration step, the API with `NODE_ENV=production`, and Mailpit to catch the
 emails.
 
 ```sh
-JWT_SECRET=$(openssl rand -hex 32) docker compose up --build
+APP_SECRET=$(openssl rand -hex 32) docker compose up --build
 # with the web app checked out next to this repo:
-JWT_SECRET=$(openssl rand -hex 32) docker compose --profile web up --build
+APP_SECRET=$(openssl rand -hex 32) docker compose --profile web up --build
 ```
 
 - API: http://localhost:8080

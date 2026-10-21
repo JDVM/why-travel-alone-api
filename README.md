@@ -27,7 +27,7 @@ Why Travel Alone is a small passion project that began as my capstone for the Br
 
 1. Clone the repository: `https://github.com/JDVM/why-travel-alone-api.git`
 2. Install dependencies: `npm install` (Node 20 or newer; `.nvmrc` pins 22)
-3. Run the application: `npm run dev` (restarts on file changes), or `npm start` in production. The server won't start until `.env` has a `JWT_SECRET` of at least 32 characters; see `.env.example`.
+3. Run the application: `npm run dev` (restarts on file changes), or `npm start` in production. The server won't start until `.env` has an `APP_SECRET` of at least 32 characters; see `.env.example`.
 
 If you encounter any issues, please feel free to contact me via GitHub.
 
@@ -59,7 +59,7 @@ The web app's repository has Playwright tests that drive a real browser through 
 
 - The API writes JSON logs to stdout, one line per event, for the hosting platform to collect. `LOG_LEVEL` sets the detail (`info` by default; tests are silent). To read them locally, pipe through `npx pino-pretty`.
 - Every request gets an id, returned in the `X-Request-Id` response header and attached to all of that request's log lines. A well-formed `X-Request-Id` from a proxy in front of the API is reused.
-- Logs carry account ids, never emails, passwords, tokens, headers or request bodies. Failed logins log a keyed hash of the email (`emailTag`), so repeated attempts on one address can be spotted.
+- Logs carry account ids, never emails, passwords, session ids, headers or request bodies. Failed logins log a keyed hash of the email (`emailTag`), so repeated attempts on one address can be spotted.
 - Auth events have an `event` field: `auth.register`, `auth.login`, `auth.login_failed`, `auth.rate_limited`.
 - Set `SENTRY_DSN` to send unexpected errors (500s, crashes) to Sentry. Events carry the account id, request id and route only: no IP address, headers, cookies, query strings or bodies.
 
@@ -73,6 +73,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md): container images for the API and web app, co
 - Accounts: every user is a traveler. Register with a name, then fill in the rest of the profile
 - Travelers: browse other travelers when logged in. Kids and special considerations are visible only to the traveler and to owners of trips they're on
 - Invitations: trip owners invite travelers, who accept or decline. Members can view a trip and leave it; only the owner can change it
+- Logins: server-side sessions in an httpOnly cookie that page scripts can't read. A session ends after 14 days unused, 30 days after login, on logout, on a password reset, or from "sign out other devices" (`GET`/`DELETE /auth/sessions`). Requests that change something must come from the web app's origin (CSRF protection). The web app and API must share a site, e.g. `app.example.com` and `api.example.com`.
 - Email:
   - Signup emails a link to confirm the address (`POST /auth/verify-email`; `POST /auth/resend-verification` sends a new one). Unverified accounts can use the app but can't send or accept invitations.
   - `POST /auth/forgot-password` always answers 202, so it doesn't reveal which emails have accounts, and emails a one-hour reset link to real ones. `POST /auth/reset-password` sets the new password and signs out every other session.

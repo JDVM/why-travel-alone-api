@@ -2,8 +2,8 @@ const crypto = require('crypto');
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const { api, knex, DEMO, createAccount, bearer } = require('./helpers');
+const { api, knex, DEMO, ORIGIN, createAccount, signedIn, sessionFrom } = require('./helpers');
+const { COOKIE_NAME, hashId } = require('../utils/sessions');
 const { TERMS_VERSION } = require('../config');
 
 const uniqueEmail = () => `auth-${crypto.randomUUID()}@example.com`;
@@ -23,11 +23,11 @@ describe('register', () => {
                 accept_terms: true,
             });
         assert.equal(res.status, 201);
-        assert.ok(res.body.token);
+        assert.equal(res.body.token, undefined);
         assert.equal(res.body.account.email, email);
         assert.equal(res.body.account.traveler.first_name, 'Ana');
 
-        const me = await api().get('/auth/me').set('Authorization', `Bearer ${res.body.token}`);
+        const me = await api().get('/auth/me').set(sessionFrom(res));
         assert.equal(me.status, 200);
         assert.equal(me.body.email, email);
         assert.deepEqual(me.body.traveler, res.body.account.traveler);
@@ -91,7 +91,7 @@ describe('login', () => {
         assert.equal(res.status, 200);
         assert.equal(res.body.account.id, DEMO.id);
         assert.equal(res.body.account.traveler.user_id, 1);
-        assert.ok(res.body.token);
+        assert.equal((await api().get('/auth/me').set(sessionFrom(res))).body.id, DEMO.id);
     });
 
     it('logs in a seeded traveler with their own login', async () => {
@@ -133,35 +133,90 @@ describe('login', () => {
     });
 });
 
-describe('tokens', () => {
-    const secret = () => process.env.JWT_SECRET;
+describe('sessions', () => {
+    const cookieFor = (value) => ({ Cookie: `${COOKIE_NAME}=${value}`, Origin: ORIGIN });
 
-    it('rejects requests without a valid bearer token', async () => {
+    it('logs in with an httpOnly, Secure, SameSite cookie, and stores only its hash', async () => {
+        const res = await api().post('/auth/login').send({ email: DEMO.email, password: DEMO.password });
+        const setCookie = res.headers['set-cookie'].find((c) => c.startsWith(`${COOKIE_NAME}=`));
+        assert.match(setCookie, /HttpOnly/);
+        assert.match(setCookie, /Secure/);
+        assert.match(setCookie, /SameSite=Lax/);
+        assert.match(setCookie, /Path=\//);
+        assert.match(setCookie, /Max-Age=2592000/);
+
+        const value = setCookie.split(';')[0].split('=')[1];
+        assert.equal(await knex('sessions').where({ id: value }).first(), undefined);
+        assert.ok(await knex('sessions').where({ id: hashId(value) }).first());
+    });
+
+    it('rejects requests without a live session', async () => {
         assert.equal((await api().get('/auth/me')).status, 401);
-        assert.equal((await api().get('/auth/me').set('Authorization', 'Token abc')).status, 401);
-        assert.equal((await api().get('/auth/me').set('Authorization', 'Bearer not-a-jwt')).status, 401);
+        assert.equal((await api().get('/auth/me').set(cookieFor('garbage'))).status, 401);
+        assert.equal((await api().get('/auth/me').set(cookieFor('x'.repeat(43)))).status, 401);
+        // A bearer token is no longer a way in.
+        assert.equal((await api().get('/auth/me').set('Authorization', 'Bearer x')).status, 401);
     });
 
-    it('rejects an expired token', async () => {
+    it('ends sessions past their 30-day limit or unused for 14 days', async () => {
+        const expired = await createAccount();
+        await knex('sessions').where({ account_id: expired.id }).update({ expires_at: new Date(Date.now() - 1000) });
+        assert.equal((await api().get('/auth/me').set(signedIn(expired))).status, 401);
+        assert.deepEqual(await knex('sessions').where({ account_id: expired.id }), []);
+
+        const idle = await createAccount();
+        await knex('sessions')
+            .where({ account_id: idle.id })
+            .update({ last_seen_at: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000) });
+        assert.equal((await api().get('/auth/me').set(signedIn(idle))).status, 401);
+    });
+
+    it('logging out ends the session and clears the cookie', async () => {
         const account = await createAccount();
-        const expired = jwt.sign(
-            { accountId: account.id, email: account.email, exp: Math.floor(Date.now() / 1000) - 60 },
-            secret(),
-            { algorithm: 'HS256' }
-        );
-        assert.equal((await api().get('/auth/me').set('Authorization', `Bearer ${expired}`)).status, 401);
+        const res = await api().post('/auth/logout').set(signedIn(account));
+        assert.equal(res.status, 204);
+        assert.match(res.headers['set-cookie'].join(), new RegExp(`${COOKIE_NAME}=;`));
+        assert.equal((await api().get('/auth/me').set(signedIn(account))).status, 401);
+
+        // Logging out without a session is harmless.
+        assert.equal((await api().post('/auth/logout').set('Origin', ORIGIN)).status, 204);
     });
 
-    it('rejects a token signed with another algorithm, even with the real secret', async () => {
+    it('lists signed-in devices and signs out all but this one', async () => {
         const account = await createAccount();
-        const hs512 = jwt.sign({ accountId: account.id, email: account.email }, secret(), { algorithm: 'HS512' });
-        assert.equal((await api().get('/auth/me').set('Authorization', `Bearer ${hs512}`)).status, 401);
-        assert.equal((await api().get('/auth/me').set(bearer(account))).status, 200);
+        const login = await api()
+            .post('/auth/login')
+            .set('User-Agent', 'Phone browser')
+            .send({ email: account.email, password: 'test-password-123' });
+        const phone = sessionFrom(login);
+
+        const list = await api().get('/auth/sessions').set(signedIn(account));
+        assert.equal(list.status, 200);
+        assert.equal(list.body.length, 2);
+        assert.deepEqual(list.body.filter((s) => s.current).map((s) => s.user_agent), ['tests']);
+        assert.ok(list.body.some((s) => s.user_agent === 'Phone browser' && !s.current));
+        assert.ok(list.body.every((s) => s.id.length === 16));
+
+        const ended = await api().delete('/auth/sessions').set(signedIn(account));
+        assert.deepEqual(ended.body, { ended: 1 });
+        assert.equal((await api().get('/auth/me').set(phone)).status, 401);
+        assert.equal((await api().get('/auth/me').set(signedIn(account))).status, 200);
     });
 
-    it('rejects a token signed with a different secret', async () => {
-        const forged = jwt.sign({ accountId: DEMO.id, email: DEMO.email }, 'x'.repeat(48), { algorithm: 'HS256' });
-        assert.equal((await api().get('/auth/me').set('Authorization', `Bearer ${forged}`)).status, 401);
+    it("refuses changes from other sites' pages", async () => {
+        const account = await createAccount();
+        const fromElsewhere = { ...signedIn(account), Origin: 'https://evil.example' };
+        const update = (headers) => api().put('/profile').set(headers).send({ first_name: 'X', last_name: 'Y' });
+
+        assert.equal((await update(fromElsewhere)).status, 403);
+        const { Origin, ...noOrigin } = signedIn(account);
+        assert.equal((await update(noOrigin)).status, 403);
+        assert.equal((await update(signedIn(account))).status, 200);
+
+        // Reading is fine from anywhere CORS lets through.
+        assert.equal((await api().get('/auth/me').set(fromElsewhere)).status, 200);
+        // So is a request with no session, e.g. an API client logging in.
+        assert.equal((await api().post('/auth/login').send({ email: DEMO.email, password: DEMO.password })).status, 200);
     });
 });
 

@@ -1,6 +1,6 @@
 # Third-party notices
 
-The subagents in `.claude/agents/` (express-expert, knex-expert, mysql-expert, jwt-expert, owasp-top10-expert) are adapted from
+The subagents in `.claude/agents/` (express-expert, knex-expert, mysql-expert, auth-expert (originally jwt-expert), owasp-top10-expert) are adapted from
 [0xfurai/claude-code-subagents](https://github.com/0xfurai/claude-code-subagents)
 (commit `9236d10`), used under the MIT License below.
 

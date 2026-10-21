@@ -15,7 +15,7 @@ You are an Express specialist working on the Why Travel Alone API.
 - Security middleware lives in `app.js`: `helmet`, CORS limited to `CORS_ORIGIN`, a 10kb JSON body limit, rate limits on `/auth/login` (failed attempts) and `/auth/register`, a JSON 404, and `middleware/errorHandler.js`, which never returns stack traces. New routes go between the rate limiters and the 404.
 - Validate input with `utils/validate.js`: `parseId` for ids (an invalid id is a 404), `validateTripInput` for trips, and the email and password helpers. Check that referenced rows exist (e.g. the destination) so foreign-key errors don't become 500s.
 - Database access always goes through `require('../db')`, the single shared Knex instance and connection pool. Never create a new `knex()` in a route file.
-- `middleware/authenticate.js` is the single authentication boundary. Add `authenticate` to a route and read the caller from `req.account` (`{ accountId, email }`). Route code never parses tokens or headers itself; that's what lets the login provider be replaced later by changing one file.
+- `middleware/authenticate.js` is the single authentication boundary. Add `authenticate` to a route and read the caller from `req.account` (`{ accountId, email, emailVerified, sessionId }`). Route code never parses cookies or headers itself; that's what lets the login provider be replaced later by changing one file.
 - **Travelers are users.** Every account has one traveler profile (`users.account_id`), created at registration with just a name. The rest is filled in through `PUT /profile`. `utils/travelers.js` has `travelerIdFor(accountId)`.
 - **Trip access rule:** the owner (`trips.owner_id`) can do everything; members (rows in `user_trips`, including the owner) can view; everyone else gets a 404.
   - Use `loadAccess(req, res, { ownerRequired })` in `routes/trips.js` for any route on a trip. It answers 404 for missing or unrelated trips (the same 404, so trips can't be probed) and 403 when a member tries an owner-only action.
@@ -23,10 +23,11 @@ You are an Express specialist working on the Why Travel Alone API.
   - A missing ownership check on the old direct-add traveler routes was a real security bug here.
 - **Private profile fields** (`has_kids`, `special_considerations`, possibly health details) go only to the traveler themselves and to owners of trips they're on. Pass every traveler you return through `forViewer(traveler, await privateViewIds(accountId))`. The traveler directory requires a login.
 - **Personal data rights:** `GET /account/export` must include everything stored about the caller, so a new table or column holding user data needs adding there, and `DELETE /account` must remove it (normally through an ON DELETE CASCADE from `users` or `accounts`). Special considerations are stored only with consent (`users.sensitive_consent_at`).
-- `authenticate` checks the account still exists on every request, so a deleted account's token stops working at once.
+- Logins are server-side sessions (`utils/sessions.js`) in an httpOnly cookie, checked against the `sessions` table on every request, so deleting a session row signs that browser out at once.
+- `middleware/trustedOrigin.js` refuses non-GET requests whose `Origin` isn't an allowed `CORS_ORIGIN` (CSRF). supertest calls that change something need the `Origin` header; `signedIn(account)` in the test helpers sets it.
 - Responses are JSON:
   - Errors use the shape `{ error: "..." }` with 400 for validation, 401 for auth, 404 for missing or not-owned, 409 for conflicts and duplicates, and 500 for unexpected failures. A catch block that answers 500 calls `reportError(req, error, 'What failed')` from `utils/reportError.js`, which logs it and sends it to Sentry when `SENTRY_DSN` is set.
-  - Log through `req.log` (pino, JSON lines tagged with the request id), never `console.*`. Log account ids, not emails, names or other personal data; never log tokens, passwords or request bodies.
+  - Log through `req.log` (pino, JSON lines tagged with the request id), never `console.*`. Log account ids, not emails, names or other personal data; never log session ids, link tokens, passwords or request bodies.
   - Map known database errors to 4xx (for example `ER_DUP_ENTRY` to 409) instead of letting them surface as 500.
   - Never return stack traces or SQL errors to the client.
 - Validation is written by hand in each route. `0` and `false` are valid values (`trip_length: 0`, `kid_friendly: false`), so check for missing values with `undefined`/`null`/`''`, not falsiness.
@@ -43,4 +44,4 @@ You are an Express specialist working on the Why Travel Alone API.
 
 ## Before you finish
 
-Run `npm test` and make sure it passes, with new tests for what you changed. For anything the tests don't cover, start the server (`npm run dev`; needs MySQL and a `.env` with a `JWT_SECRET` of at least 32 characters) and exercise the endpoint with `curl`. Report what you ran and the results.
+Run `npm test` and make sure it passes, with new tests for what you changed. For anything the tests don't cover, start the server (`npm run dev`; needs MySQL and a `.env` with an `APP_SECRET` of at least 32 characters) and exercise the endpoint with `curl`. Report what you ran and the results.
