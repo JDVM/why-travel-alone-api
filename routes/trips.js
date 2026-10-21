@@ -222,6 +222,14 @@ router.delete("/:id", async (req, res) => {
     }
 });
 
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_INVITATIONS_PER_DAY = 20;
+
+function invitationsPerDay(env = process.env) {
+    const limit = Number(env.INVITATIONS_PER_DAY);
+    return Number.isInteger(limit) && limit > 0 ? limit : DEFAULT_INVITATIONS_PER_DAY;
+}
+
 // The owner invites a traveler. A traveler who declined, or left the trip,
 // can't be invited to it again.
 router.post("/:id/invitations", requireVerifiedEmail, async (req, res) => {
@@ -252,6 +260,22 @@ router.post("/:id/invitations", requireVerifiedEmail, async (req, res) => {
         }
         if (existing && existing.status === "declined") {
             return res.status(409).json({ error: "Traveler declined an invitation to this trip" });
+        }
+
+        // A cap on invitations per owner per day, so an account can't be used to
+        // spam other travelers.
+        const limit = invitationsPerDay();
+        const { sent } = await knex("trip_invitations")
+            .join("trips", "trips.id", "trip_invitations.trip_id")
+            .where("trips.owner_id", req.account.accountId)
+            .where("trip_invitations.created_at", ">", new Date(Date.now() - ONE_DAY_MS))
+            .count({ sent: "*" })
+            .first();
+        if (Number(sent) >= limit) {
+            req.log.warn({ event: "invitations.daily_limit", accountId: req.account.accountId }, "Invitation limit reached");
+            return res.status(429).json({
+                error: `You can send up to ${limit} invitations a day. Please try again tomorrow.`,
+            });
         }
 
         if (existing) {

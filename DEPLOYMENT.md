@@ -46,6 +46,7 @@ You need:
 | `MAIL_FROM` | yes | e.g. `Why Travel Alone <no-reply@example.com>`, on your sending domain. |
 | `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` | no | Error reporting. Set `SENTRY_RELEASE` to the git commit. |
 | `LOG_LEVEL` | no | Default `info`. |
+| `INVITATIONS_PER_DAY` | no | Most invitations one account can send in 24 hours, default 20. Limits spam; hitting it is logged as `invitations.daily_limit`. |
 
 The API refuses to start, with a list of what's missing, if a required
 production setting is absent.

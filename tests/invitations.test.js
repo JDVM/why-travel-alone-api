@@ -193,6 +193,36 @@ describe('invitation errors', () => {
     });
 });
 
+describe('daily invitation limit', () => {
+    it('caps how many invitations one account sends in a day', async () => {
+        const previous = process.env.INVITATIONS_PER_DAY;
+        process.env.INVITATIONS_PER_DAY = '2';
+        try {
+            const { owner, tripId } = await setup();
+            const guests = [await createAccount(), await createAccount(), await createAccount()];
+            assert.equal((await invite(owner, tripId, guests[0].travelerId)).status, 201);
+            assert.equal((await invite(owner, tripId, guests[1].travelerId)).status, 201);
+
+            const blocked = await invite(owner, tripId, guests[2].travelerId);
+            assert.equal(blocked.status, 429);
+            assert.match(blocked.body.error, /up to 2 invitations a day/);
+
+            // Another owner has their own allowance.
+            const other = await setup();
+            assert.equal((await invite(other.owner, other.tripId, guests[2].travelerId)).status, 201);
+
+            // Invitations from more than a day ago no longer count.
+            await knex('trip_invitations')
+                .where({ trip_id: tripId })
+                .update({ created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) });
+            assert.equal((await invite(owner, tripId, guests[2].travelerId)).status, 201);
+        } finally {
+            if (previous === undefined) delete process.env.INVITATIONS_PER_DAY;
+            else process.env.INVITATIONS_PER_DAY = previous;
+        }
+    });
+});
+
 describe('deleting a trip', () => {
     it('removes its invitations and memberships', async () => {
         const { owner, guest, tripId } = await setup();
