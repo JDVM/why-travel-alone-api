@@ -72,7 +72,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md): container images for the API and web app, co
 - Trips: Add, Edit, Delete trips
 - Accounts: every user is a traveler. Register with a name, then fill in the rest of the profile
 - Travelers: browse other travelers when logged in. Kids and special considerations are visible only to the traveler and to owners of trips they're on
-- Invitations: trip owners invite travelers, who accept or decline. Members can view a trip and leave it; only the owner can change it
+- Invitations: trip owners invite travelers, who accept or decline. An account can send up to 20 invitations a day (`INVITATIONS_PER_DAY`). Members can view a trip and leave it; only the owner can change it
 - Logins: server-side sessions in an httpOnly cookie that page scripts can't read. A session ends after 14 days unused, 30 days after login, on logout, on a password reset, or from "sign out other devices" (`GET`/`DELETE /auth/sessions`). Requests that change something must come from the web app's origin (CSRF protection). The web app and API must share a site, e.g. `app.example.com` and `api.example.com`.
 - Email:
   - Signup emails a link to confirm the address (`POST /auth/verify-email`; `POST /auth/resend-verification` sends a new one). Unverified accounts can use the app but can't send or accept invitations.
