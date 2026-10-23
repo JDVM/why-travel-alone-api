@@ -20,8 +20,9 @@ Why Travel Alone is a small passion project that began as my capstone for the Br
 ### Front-End
 
 1. Clone the repository: `https://github.com/JDVM/why-travel-alone.git`
-2. Install dependencies: `npm install axios sass react-router-dom`
-3. Run the application: `npm start`
+2. Install dependencies: `npm ci`
+3. Copy `.env.example` to `.env` and point it at the API
+4. Run the application: `npm start` (http://localhost:3000). See that repository's README for its tests.
 
 ### Back-end
 

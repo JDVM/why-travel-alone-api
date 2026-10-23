@@ -167,7 +167,8 @@ those backups expire, as the privacy policy says.
 
 - **One API instance** handles a launch comfortably. Before running more than one, move the rate-limit counters to a shared store such as Redis (`rate-limit-redis`). They're in memory today, so each instance would allow its own 10 login attempts.
 - **Database connections:** `DB_POOL_MAX × instances` must stay below the database's connection limit.
-- **Web container:** it's stateless static files, so run as many as needed, or put a CDN in front. Files under `/static/` are cached for good; `index.html` is never cached.
+- **Web container:** it's stateless static files, so run as many as needed, or put a CDN in front. Files under `/assets/` have content hashes in their names and are cached for good; `index.html` is never cached.
+- **A CDN or caching proxy must never cache `index.html`** (or any page path, which all serve it). nginx writes a fresh Content-Security-Policy nonce into each copy, matching that response's header. A cached copy would carry a stale nonce, the browser would block the app's styles, and pages would render unstyled. Pass `index.html` through uncached (respect its `Cache-Control: no-cache`) and cache only `/assets/`.
 
 ## Launch checklist
 
